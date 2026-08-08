@@ -1,0 +1,234 @@
+import Survey from '../models/Survey.js';
+import Question from '../models/Question.js';
+import Tablet from '../models/Tablet.js';
+import FeedbackSession from '../models/FeedbackSession.js';
+import FeedbackAnswer from '../models/FeedbackAnswer.js';
+import { validateAnswerForQuestion } from '../services/feedbackService.js';
+
+/**
+ * Clearly non-production sample feedback sessions, generated only
+ * against the two surveys surveySeeder.js currently leaves published
+ * ("General Service Feedback" [Global] and "Registrar Office Feedback")
+ * — "Library Services Feedback" is seeded as a draft, and a real tablet
+ * could never have retrieved/submitted against an unpublished survey.
+ * Distributed across all 4 seeded tablets so both Registrar and Library
+ * have their own sessions (departmentId is derived from each tablet's
+ * own department, not the survey's — a Global survey answered from a
+ * Library tablet still belongs to Library, per this phase's "always
+ * derive departmentId from Location" rule) for department-isolation
+ * testing. `answer` values are matched to each survey's actual
+ * question text/order and re-validated through
+ * feedbackService.validateAnswerForQuestion — the exact validation a
+ * future mobile submission endpoint will also use.
+ */
+const FEEDBACK_SESSIONS = [
+  {
+    referenceCode: 'FB-2026-000001',
+    surveyTitle: 'General Service Feedback',
+    tabletDeviceCode: 'REG-TAB-01',
+    submittedAt: '2026-07-20T09:15:00.000Z',
+    completedAt: '2026-07-20T09:16:40.000Z',
+    answers: [
+      { questionText: 'How would you rate your overall experience today?', answer: 5 },
+      { questionText: 'Would you recommend our services to others?', answer: true },
+      {
+        questionText: 'Do you have any additional comments?',
+        answer: 'Staff were very helpful and quick to assist.',
+      },
+    ],
+  },
+  {
+    referenceCode: 'FB-2026-000002',
+    surveyTitle: 'General Service Feedback',
+    tabletDeviceCode: 'REG-TAB-01',
+    submittedAt: '2026-07-22T13:05:00.000Z',
+    completedAt: '2026-07-22T13:06:30.000Z',
+    answers: [
+      { questionText: 'How would you rate your overall experience today?', answer: 4 },
+      { questionText: 'Would you recommend our services to others?', answer: true },
+      {
+        questionText: 'Do you have any additional comments?',
+        answer: 'Overall a good experience, slight wait time.',
+      },
+    ],
+  },
+  {
+    referenceCode: 'FB-2026-000003',
+    surveyTitle: 'General Service Feedback',
+    tabletDeviceCode: 'REG-TAB-02',
+    submittedAt: '2026-07-24T10:40:00.000Z',
+    completedAt: '2026-07-24T10:41:50.000Z',
+    answers: [
+      { questionText: 'How would you rate your overall experience today?', answer: 2 },
+      { questionText: 'Would you recommend our services to others?', answer: false },
+      {
+        questionText: 'Do you have any additional comments?',
+        answer: 'Had to wait a long time before being assisted.',
+      },
+    ],
+  },
+  {
+    referenceCode: 'FB-2026-000004',
+    surveyTitle: 'General Service Feedback',
+    tabletDeviceCode: 'LIB-TAB-01',
+    submittedAt: '2026-07-25T14:20:00.000Z',
+    completedAt: '2026-07-25T14:21:15.000Z',
+    answers: [
+      { questionText: 'How would you rate your overall experience today?', answer: 5 },
+      { questionText: 'Would you recommend our services to others?', answer: true },
+      { questionText: 'Do you have any additional comments?', answer: 'The library staff were excellent.' },
+    ],
+  },
+  {
+    referenceCode: 'FB-2026-000005',
+    surveyTitle: 'General Service Feedback',
+    tabletDeviceCode: 'LIB-TAB-02',
+    submittedAt: '2026-07-27T11:00:00.000Z',
+    completedAt: '2026-07-27T11:01:20.000Z',
+    answers: [
+      { questionText: 'How would you rate your overall experience today?', answer: 3 },
+      { questionText: 'Would you recommend our services to others?', answer: true },
+      { questionText: 'Do you have any additional comments?', answer: '' },
+    ],
+  },
+  {
+    referenceCode: 'FB-2026-000006',
+    surveyTitle: 'General Service Feedback',
+    tabletDeviceCode: 'REG-TAB-01',
+    submittedAt: '2026-07-29T08:50:00.000Z',
+    completedAt: '2026-07-29T08:51:30.000Z',
+    answers: [
+      { questionText: 'How would you rate your overall experience today?', answer: 1 },
+      { questionText: 'Would you recommend our services to others?', answer: false },
+      {
+        questionText: 'Do you have any additional comments?',
+        answer: 'Very disappointing service today, needs improvement.',
+      },
+    ],
+  },
+  {
+    referenceCode: 'FB-2026-000007',
+    surveyTitle: 'Registrar Office Feedback',
+    tabletDeviceCode: 'REG-TAB-01',
+    submittedAt: '2026-07-30T09:05:00.000Z',
+    completedAt: '2026-07-30T09:07:00.000Z',
+    answers: [
+      { questionText: 'How satisfied are you with the registration process?', answer: 5 },
+      { questionText: 'Which service did you avail today?', answer: 'Enrollment' },
+      { questionText: 'Was your concern resolved?', answer: true },
+      { questionText: 'Any suggestions for improvement?', answer: 'Keep up the great work!' },
+    ],
+  },
+  {
+    referenceCode: 'FB-2026-000008',
+    surveyTitle: 'Registrar Office Feedback',
+    tabletDeviceCode: 'REG-TAB-02',
+    submittedAt: '2026-08-01T15:30:00.000Z',
+    completedAt: '2026-08-01T15:32:10.000Z',
+    answers: [
+      { questionText: 'How satisfied are you with the registration process?', answer: 4 },
+      { questionText: 'Which service did you avail today?', answer: 'Document Request' },
+      { questionText: 'Was your concern resolved?', answer: true },
+      { questionText: 'Any suggestions for improvement?', answer: 'Fast processing.' },
+    ],
+  },
+  {
+    referenceCode: 'FB-2026-000009',
+    surveyTitle: 'Registrar Office Feedback',
+    tabletDeviceCode: 'REG-TAB-01',
+    submittedAt: '2026-08-03T10:10:00.000Z',
+    completedAt: '2026-08-03T10:11:45.000Z',
+    answers: [
+      { questionText: 'How satisfied are you with the registration process?', answer: 3 },
+      { questionText: 'Which service did you avail today?', answer: 'Grade Inquiry' },
+      { questionText: 'Was your concern resolved?', answer: false },
+      {
+        questionText: 'Any suggestions for improvement?',
+        answer: 'Still waiting for a response on my inquiry.',
+      },
+    ],
+  },
+  {
+    referenceCode: 'FB-2026-000010',
+    surveyTitle: 'Registrar Office Feedback',
+    tabletDeviceCode: 'REG-TAB-02',
+    submittedAt: '2026-08-05T16:00:00.000Z',
+    completedAt: '2026-08-05T16:01:35.000Z',
+    answers: [
+      { questionText: 'How satisfied are you with the registration process?', answer: 5 },
+      { questionText: 'Which service did you avail today?', answer: 'Other' },
+      { questionText: 'Was your concern resolved?', answer: true },
+      { questionText: 'Any suggestions for improvement?', answer: 'No complaints, excellent service.' },
+    ],
+  },
+];
+
+/**
+ * Idempotent: each session is matched/upserted by its unique
+ * `referenceCode` (the seeder's own stable business key, same
+ * convention as Survey's title-matching — see surveySeeder.js); each
+ * answer is matched/upserted by { feedbackSessionId, questionId }.
+ * `durationSeconds` is always recomputed from submittedAt/completedAt
+ * rather than hardcoded, so the two can never drift out of sync.
+ * Sessions/answers referencing a survey, tablet, or question that
+ * doesn't exist yet (e.g. this seeder run before surveySeeder/
+ * tabletSeeder) are safely skipped, matching tabletSeeder.js/
+ * surveySeeder.js's own "skip if a dependency is missing" convention.
+ */
+export async function seedFeedback() {
+  let sessionCount = 0;
+  let answerCount = 0;
+
+  for (const definition of FEEDBACK_SESSIONS) {
+    const survey = await Survey.findOne({ title: definition.surveyTitle });
+    const tablet = await Tablet.findOne({ deviceCode: definition.tabletDeviceCode });
+
+    if (!survey || !tablet) {
+      continue;
+    }
+
+    const submittedAt = new Date(definition.submittedAt);
+    const completedAt = new Date(definition.completedAt);
+    const durationSeconds = Math.round((completedAt.getTime() - submittedAt.getTime()) / 1000);
+
+    const session = await FeedbackSession.findOneAndUpdate(
+      { referenceCode: definition.referenceCode },
+      {
+        $set: {
+          surveyId: survey._id,
+          tabletId: tablet._id,
+          locationId: tablet.locationId,
+          departmentId: tablet.departmentId,
+          submittedAt,
+          completedAt,
+          durationSeconds,
+          status: 'completed',
+        },
+      },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
+    );
+    sessionCount += 1;
+
+    for (const answerDefinition of definition.answers) {
+      const question = await Question.findOne({
+        surveyId: survey._id,
+        questionText: answerDefinition.questionText,
+      });
+
+      if (!question) {
+        continue;
+      }
+
+      const normalizedAnswer = validateAnswerForQuestion(question, answerDefinition.answer);
+
+      await FeedbackAnswer.findOneAndUpdate(
+        { feedbackSessionId: session._id, questionId: question._id },
+        { $set: { questionType: question.questionType, answer: normalizedAnswer } },
+        { upsert: true, setDefaultsOnInsert: true },
+      );
+      answerCount += 1;
+    }
+  }
+
+  return { sessionCount, answerCount };
+}

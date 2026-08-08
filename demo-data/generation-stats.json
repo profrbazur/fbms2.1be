@@ -1,0 +1,48 @@
+{
+  "generatedAt": "2026-08-08T03:16:25.809Z",
+  "seed": 20260801,
+  "totalSessions": 3000,
+  "dateRange": {
+    "start": "2026-03-01T00:00:00.000Z",
+    "end": "2026-08-08T00:00:00.000Z"
+  },
+  "referenceCodeRange": {
+    "first": "FB-2026-000011",
+    "last": "FB-2026-003010"
+  },
+  "byDepartment": {
+    "registrar": 1878,
+    "library": 1122
+  },
+  "bySurvey": {
+    "Registrar Office Feedback": 1878,
+    "General Service Feedback": 1122
+  },
+  "byTablet": {
+    "REG-TAB-02": 867,
+    "LIB-TAB-02": 504,
+    "LIB-TAB-01": 618,
+    "REG-TAB-01": 1011
+  },
+  "byMonth": {
+    "2026-03": 723,
+    "2026-04": 560,
+    "2026-05": 277,
+    "2026-06": 609,
+    "2026-07": 686,
+    "2026-08": 145
+  },
+  "ratingDistribution": {
+    "1": 236,
+    "2": 407,
+    "3": 568,
+    "4": 926,
+    "5": 863
+  },
+  "averageRatingOverall": 3.59,
+  "averageRatingByDepartment": {
+    "registrar": 3.48,
+    "library": 3.78
+  },
+  "totalAnswers": 10671
+}

@@ -1,0 +1,40 @@
+import { Router } from 'express';
+import healthRoutes from './health/index.js';
+import authRoutes from './auth/index.js';
+import dashboardRoutes from './dashboard/index.js';
+import feedbackRoutes from './feedback/index.js';
+import organizationRoutes from './organization/index.js';
+import organizationSettingsRoutes from './organization/settingsRoutes.js';
+import locationRoutes from './organization/locationRoutes.js';
+import personnelRoutes from './personnel/index.js';
+import tabletsRoutes from './tablets/index.js';
+import surveysRoutes from './surveys/index.js';
+import questionsRoutes from './surveys/questionRoutes.js';
+import reportsRoutes from './reports/index.js';
+import settingsRoutes from './settings/index.js';
+import auditRoutes from './audit/index.js';
+import mobileRoutes from './mobile/index.js';
+import liveMonitoringRoutes from './live-monitoring/index.js';
+import developerPortalRoutes from './developer-portal/index.js';
+
+const router = Router();
+
+router.use('/health', healthRoutes);
+router.use('/auth', authRoutes);
+router.use('/dashboard', dashboardRoutes);
+router.use('/feedback', feedbackRoutes);
+router.use('/organization', organizationSettingsRoutes);
+router.use('/departments', organizationRoutes);
+router.use('/locations', locationRoutes);
+router.use('/personnel', personnelRoutes);
+router.use('/tablets', tabletsRoutes);
+router.use('/surveys', surveysRoutes);
+router.use('/questions', questionsRoutes);
+router.use('/reports', reportsRoutes);
+router.use('/settings', settingsRoutes);
+router.use('/audit-logs', auditRoutes);
+router.use('/mobile', mobileRoutes);
+router.use('/live-monitoring', liveMonitoringRoutes);
+router.use('/developer-portal', developerPortalRoutes);
+
+export default router;
