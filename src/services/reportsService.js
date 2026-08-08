@@ -9,6 +9,7 @@ import { getFeedbackStatsForTablets } from './liveMonitoringService.js';
 import {
   buildFeedbackScopeFilter,
   buildReportFilter,
+  applyDefaultAnalysisWindow,
   getAverageRating,
   getRatingAveragesByField,
   getFeedbackTrend,
@@ -88,7 +89,11 @@ function resolveAssignmentType(survey) {
  * responses so far.
  */
 async function listVisibleSurveysForReport(user, { departmentId, surveyId }) {
-  const { surveys } = await listSurveys(user, { departmentId, limit: REPORT_ENTITY_LIMIT });
+  const { surveys } = await listSurveys(user, {
+    departmentId,
+    limit: REPORT_ENTITY_LIMIT,
+    includeGlobal: true,
+  });
   if (!surveyId) return surveys;
 
   assertValidObjectIdParam(surveyId, 'surveyId');
@@ -217,6 +222,19 @@ export async function getFeedbackSummaryReport(user, query = {}) {
   // docs/DECISIONS.md.
   const scopeOnlyFilter = buildReportFilter(user, { departmentId, locationId, surveyId });
 
+  const trendDaysNum = trendDays !== undefined ? Number(trendDays) : undefined;
+
+  // Issue 3 fix (V2.1.1): Rating Distribution shares the same 7/30-day
+  // "Analysis Period" window as Feedback Trend when no explicit custom
+  // date range is selected (see applyDefaultAnalysisWindow's own doc
+  // comment) — resolved once, up front, since getRatingDistribution below
+  // needs the already-resolved filter object, not a pending promise.
+  const ratingDistributionFilter = await applyDefaultAnalysisWindow(filter, {
+    days: trendDaysNum,
+    dateFrom,
+    dateTo,
+  });
+
   const now = new Date();
   const startOfToday = new Date(now);
   startOfToday.setUTCHours(0, 0, 0, 0);
@@ -247,14 +265,21 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     FeedbackSession.countDocuments({ ...scopeOnlyFilter, submittedAt: { $gte: startOfToday } }),
     FeedbackSession.countDocuments({ ...scopeOnlyFilter, submittedAt: { $gte: startOfWeek } }),
     FeedbackSession.countDocuments({ ...scopeOnlyFilter, submittedAt: { $gte: startOfMonth } }),
-    listSurveys(user, { departmentId, locationId, isPublished: true, isArchived: false, limit: 1 }),
+    listSurveys(user, {
+      departmentId,
+      locationId,
+      isPublished: true,
+      isArchived: false,
+      limit: 1,
+      includeGlobal: true,
+    }),
     Tablet.countDocuments({
       ...buildFeedbackScopeFilter(user, { departmentId }),
       ...(locationId ? { locationId } : {}),
       isActive: true,
     }),
-    getFeedbackTrend(scopeOnlyFilter, { days: trendDays !== undefined ? Number(trendDays) : undefined, dateFrom, dateTo }),
-    getRatingDistribution(filter),
+    getFeedbackTrend(scopeOnlyFilter, { days: trendDaysNum, dateFrom, dateTo }),
+    getRatingDistribution(ratingDistributionFilter),
     getFeedbackByDepartment(filter),
     getFeedbackBySurvey(filter),
     getFeedbackByLocation(filter),

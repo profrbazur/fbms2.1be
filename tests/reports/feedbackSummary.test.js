@@ -6,6 +6,7 @@ import Location from '../../src/models/Location.js';
 import Survey from '../../src/models/Survey.js';
 import Tablet from '../../src/models/Tablet.js';
 import FeedbackSession from '../../src/models/FeedbackSession.js';
+import FeedbackAnswer from '../../src/models/FeedbackAnswer.js';
 import { resetAndSeed } from '../utils/seedTestUsers.js';
 import { loginAllSeededRoles } from '../utils/authTokens.js';
 import { disconnectTestDb } from '../utils/testDb.js';
@@ -154,6 +155,41 @@ describe('GET /api/v1/reports/feedback-summary', () => {
       expect(res.body.data.summary.totalFeedback).toBe(2);
       expect(res.body.data.filters.departmentId).toBe(libraryDept._id.toString());
     });
+
+    // V2.1.1 regression: `departmentId` arrives from the query string as a
+    // plain JS string; every aggregation-based metric below (unlike the
+    // plain-count `totalFeedback` above) used to silently match zero
+    // documents because it was never cast to a BSON ObjectId before
+    // reaching a `$match` stage. This is the exact "Total Feedback = 1124
+    // but everything else = No data yet" bug reported live.
+    it('Super Admin narrowed by departmentId also gets correctly-scoped averageRating/ratingDistribution/activeSurveysCount/departmentsRepresented — not silently empty', async () => {
+      // Explicit range covering the full fixture — isolates this test to
+      // the ObjectId-casting fix alone, independent of Issue 3's separate
+      // default-rolling-window behavior (covered in its own describe
+      // block below).
+      const res = await getReport(
+        roles.superAdmin.token,
+        `?departmentId=${libraryDept._id.toString()}&dateFrom=2026-07-01&dateTo=2026-08-06`,
+      );
+      const { summary, ratingDistribution, feedbackByDepartment } = res.body.data;
+
+      expect(summary.totalFeedback).toBe(2);
+      expect(summary.averageRating).toBeCloseTo(4, 2);
+      expect(summary.departmentsRepresented).toBe(1);
+      // The Global survey ("General Service Feedback") is the one Library
+      // actually collected feedback against — Survey.departmentId is null
+      // (Global), so this only passes once Active Surveys stops requiring
+      // strict Survey.departmentId equality for a department-narrowed
+      // Super Admin query.
+      expect(summary.activeSurveysCount).toBeGreaterThan(0);
+
+      const ratingTotal = ratingDistribution.reduce((sum, r) => sum + r.count, 0);
+      expect(ratingTotal).toBe(2);
+
+      expect(feedbackByDepartment).toHaveLength(1);
+      expect(feedbackByDepartment[0]).toMatchObject({ departmentName: 'Library', count: 2 });
+      expect(feedbackByDepartment[0].averageRating).toBeCloseTo(4, 2);
+    });
   });
 
   describe('input validation', () => {
@@ -262,8 +298,18 @@ describe('GET /api/v1/reports/feedback-summary', () => {
   });
 
   describe('rating distribution', () => {
+    // V2.1.1 (Issue 3 fix): with no explicit date range, rating distribution
+    // now shares the same default 7-day rolling window as feedback trend
+    // (previously it silently ignored the window entirely and was always
+    // all-time — see the "shared analysis period" describe block below).
+    // These three tests exercise the fixed 10-session fixture regardless
+    // of the window, so they explicitly pass a wide dateFrom/dateTo
+    // covering every seeded session — keeping them deterministic
+    // independent of whatever the real wall-clock date is at test time.
+    const FULL_FIXTURE_RANGE = '?dateFrom=2026-07-01&dateTo=2026-08-06';
+
     it('returns exact counts and percentages for Super Admin (system-wide)', async () => {
-      const res = await getReport(roles.superAdmin.token);
+      const res = await getReport(roles.superAdmin.token, FULL_FIXTURE_RANGE);
       expect(res.body.data.ratingDistribution).toEqual([
         { rating: 1, count: 1, percentage: 10 },
         { rating: 2, count: 1, percentage: 10 },
@@ -274,13 +320,13 @@ describe('GET /api/v1/reports/feedback-summary', () => {
     });
 
     it('is department-scoped for a Department Head', async () => {
-      const res = await getReport(roles.registrarHead.token);
+      const res = await getReport(roles.registrarHead.token, FULL_FIXTURE_RANGE);
       const total = res.body.data.ratingDistribution.reduce((sum, r) => sum + r.count, 0);
       expect(total).toBe(8);
     });
 
     it('never infers a rating from a non-rating answer', async () => {
-      const res = await getReport(roles.superAdmin.token);
+      const res = await getReport(roles.superAdmin.token, FULL_FIXTURE_RANGE);
       const total = res.body.data.ratingDistribution.reduce((sum, r) => sum + r.count, 0);
       expect(total).toBe(10); // exactly one rating answer per seeded session, never more
     });
@@ -389,6 +435,16 @@ describe('GET /api/v1/reports/feedback-summary', () => {
       expect(res.body.data.surveyPerformance).toHaveLength(1);
       expect(res.body.data.surveyPerformance[0].surveyId).toBe(registrarSurvey._id.toString());
     });
+
+    it('a Super Admin narrowed by departmentId still sees the Global survey that department actually used (never inferred from Survey.departmentId ownership)', async () => {
+      const res = await getReport(roles.superAdmin.token, `?departmentId=${libraryDept._id.toString()}`);
+      const { surveyPerformance } = res.body.data;
+
+      const general = surveyPerformance.find((s) => s.title === 'General Service Feedback');
+      expect(general).toBeTruthy();
+      expect(general.assignmentType).toBe('Global');
+      expect(general.feedbackCount).toBe(2);
+    });
   });
 
   describe('tablet contribution', () => {
@@ -431,6 +487,50 @@ describe('GET /api/v1/reports/feedback-summary', () => {
         expect(t.feedbackCount).toBe(0);
         expect(t.lastFeedbackAt).toBeNull();
       });
+    });
+  });
+
+  describe('shared analysis period (Issue 3 fix — rating distribution follows the same 7/30-day window as feedback trend)', () => {
+    async function countRatingAnswersInRollingWindow(days) {
+      const endDate = new Date();
+      endDate.setUTCHours(0, 0, 0, 0);
+      const startDate = new Date(endDate);
+      startDate.setUTCDate(startDate.getUTCDate() - (days - 1));
+      const rangeEndExclusive = new Date(endDate);
+      rangeEndExclusive.setUTCDate(rangeEndExclusive.getUTCDate() + 1);
+
+      const sessions = await FeedbackSession.find({
+        submittedAt: { $gte: startDate, $lt: rangeEndExclusive },
+      }).select('_id');
+      return FeedbackAnswer.countDocuments({
+        questionType: 'rating',
+        feedbackSessionId: { $in: sessions.map((s) => s._id) },
+      });
+    }
+
+    it('with no explicit date range, rating distribution is scoped to the default 7-day window, not all-time', async () => {
+      const res = await getReport(roles.superAdmin.token);
+      const expectedTotal = await countRatingAnswersInRollingWindow(7);
+      const actualTotal = res.body.data.ratingDistribution.reduce((sum, r) => sum + r.count, 0);
+      expect(actualTotal).toBe(expectedTotal);
+    });
+
+    it('?trendDays=30 widens rating distribution to the same 30-day window as feedback trend', async () => {
+      const res = await getReport(roles.superAdmin.token, '?trendDays=30');
+      const expectedTotal = await countRatingAnswersInRollingWindow(30);
+      const actualTotal = res.body.data.ratingDistribution.reduce((sum, r) => sum + r.count, 0);
+      expect(actualTotal).toBe(expectedTotal);
+    });
+
+    it('an explicit custom date range still scopes rating distribution to that exact range (ADR-041 semantics unchanged)', async () => {
+      // dateTo is a literal timestamp here (matching every other report
+      // section's existing, documented convention — see the "dateTo
+      // narrows totalFeedback" test above), not end-of-day: only session 1
+      // (07-20T09:15) is at/before 2026-07-21T00:00; session 2 (07-22) is
+      // excluded by dateTo entirely.
+      const res = await getReport(roles.superAdmin.token, '?dateFrom=2026-07-20&dateTo=2026-07-21');
+      const total = res.body.data.ratingDistribution.reduce((sum, r) => sum + r.count, 0);
+      expect(total).toBe(1); // session 1 only
     });
   });
 

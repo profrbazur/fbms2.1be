@@ -447,6 +447,18 @@ export const schemas = {
               },
             },
           },
+          feedbackByMonth: {
+            type: 'array',
+            description:
+              'V2.1.1 (Monthly Feedback Breakdown, Issue 4) — purely additive field, spans from the earliest in-scope session\'s month through the current month (capped at 12 months), zero-filled.',
+            items: {
+              type: 'object',
+              properties: {
+                month: { type: 'string', example: '2026-08', description: 'YYYY-MM' },
+                count: { type: 'integer', example: 340 },
+              },
+            },
+          },
           tabletStatusDistribution: {
             type: 'object',
             properties: { online: { type: 'integer' }, offline: { type: 'integer' }, inactive: { type: 'integer' } },

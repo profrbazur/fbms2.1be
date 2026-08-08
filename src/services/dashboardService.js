@@ -8,6 +8,7 @@ import {
   getFeedbackTrend,
   getFeedbackByDepartment,
   getFeedbackBySurvey,
+  getFeedbackByMonth,
 } from './analyticsService.js';
 
 const RECENT_FEEDBACK_LIMIT = 5;
@@ -26,6 +27,12 @@ const RECENT_FEEDBACK_LIMIT = 5;
  * already-fetched values, not new queries. No `POST`/`PATCH`/`DELETE`
  * exists anywhere in this module — strictly read-only, matching this
  * phase's "operational summary only" objective.
+ *
+ * V2.1.1 (Issue 4): `charts.feedbackByMonth` is a new, purely additive
+ * field (no existing field removed, renamed, or retyped — see ADR-051's
+ * "bug fixes/additive changes remain permitted" carve-out) — Monthly
+ * Feedback Breakdown, scoped by the same `scopeFilter` as every other
+ * chart here (system-wide for Super Admin, department-pinned otherwise).
  */
 export async function getDashboardSummary(user, { trendDays } = {}) {
   const scopeFilter = buildFeedbackScopeFilter(user);
@@ -40,6 +47,7 @@ export async function getDashboardSummary(user, { trendDays } = {}) {
     feedbackTrend,
     feedbackByDepartment,
     feedbackBySurvey,
+    feedbackByMonth,
     recent,
   ] = await Promise.all([
     getLiveMonitoringSummary(user),
@@ -51,6 +59,7 @@ export async function getDashboardSummary(user, { trendDays } = {}) {
     getFeedbackTrend(scopeFilter, { days: trendDays }),
     getFeedbackByDepartment(scopeFilter),
     getFeedbackBySurvey(scopeFilter),
+    getFeedbackByMonth(scopeFilter),
     listFeedbackSessions(user, { limit: RECENT_FEEDBACK_LIMIT }),
   ]);
 
@@ -71,6 +80,7 @@ export async function getDashboardSummary(user, { trendDays } = {}) {
       feedbackTrend,
       feedbackByDepartment,
       feedbackBySurvey,
+      feedbackByMonth,
       tabletStatusDistribution: {
         online: liveMonitoring.onlineCount,
         offline: liveMonitoring.offlineCount,

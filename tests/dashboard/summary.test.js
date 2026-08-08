@@ -250,6 +250,84 @@ describe('GET /api/v1/dashboard/summary', () => {
     });
   });
 
+  describe('feedbackByMonth (Issue 4 — Monthly Feedback Breakdown, V2.1.1)', () => {
+    it('sums to totalFeedback for Super Admin (system-wide)', async () => {
+      const res = await getSummary(roles.superAdmin.token);
+      const { charts, cards } = res.body.data;
+
+      const total = charts.feedbackByMonth.reduce((sum, row) => sum + row.count, 0);
+      expect(total).toBe(cards.totalFeedback);
+    });
+
+    it('is scoped to a Department Head\'s own department, summing to their own totalFeedback', async () => {
+      const res = await getSummary(roles.registrarHead.token);
+      const { charts, cards } = res.body.data;
+
+      const total = charts.feedbackByMonth.reduce((sum, row) => sum + row.count, 0);
+      expect(total).toBe(cards.totalFeedback);
+    });
+
+    it('every entry has a YYYY-MM month and a non-negative count, ascending with no gaps', async () => {
+      const res = await getSummary(roles.superAdmin.token);
+      const { feedbackByMonth } = res.body.data.charts;
+
+      expect(feedbackByMonth.length).toBeGreaterThan(0);
+      feedbackByMonth.forEach((row) => {
+        expect(row.month).toMatch(/^\d{4}-\d{2}$/);
+        expect(row.count).toBeGreaterThanOrEqual(0);
+      });
+
+      const months = feedbackByMonth.map((row) => row.month);
+      expect(months).toEqual([...months].sort());
+
+      for (let i = 1; i < months.length; i += 1) {
+        const [prevYear, prevMonth] = months[i - 1].split('-').map(Number);
+        const expectedNext =
+          prevMonth === 12 ? `${prevYear + 1}-01` : `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}`;
+        expect(months[i]).toBe(expectedNext);
+      }
+    });
+
+    it('caps at MAX_MONTHLY_BREAKDOWN_MONTHS (12) even if a session predates that window', async () => {
+      const survey = await Survey.findOne({ title: 'General Service Feedback' });
+      const tablet = await Tablet.findOne({ deviceCode: 'REG-TAB-01' });
+      const ancientDate = new Date();
+      ancientDate.setUTCFullYear(ancientDate.getUTCFullYear() - 5);
+
+      await FeedbackSession.create({
+        referenceCode: 'FB-2026-DASH-ANCIENT',
+        surveyId: survey._id,
+        tabletId: tablet._id,
+        locationId: tablet.locationId,
+        departmentId: tablet.departmentId,
+        submittedAt: ancientDate,
+        completedAt: ancientDate,
+        durationSeconds: 0,
+        status: 'completed',
+      });
+
+      const res = await getSummary(roles.superAdmin.token);
+      expect(res.body.data.charts.feedbackByMonth.length).toBeLessThanOrEqual(12);
+
+      await FeedbackSession.deleteOne({ referenceCode: 'FB-2026-DASH-ANCIENT' });
+    });
+
+    it('returns an empty array (not a zero-filled single bucket) when a scoped role has no feedback in scope', async () => {
+      // No fixture role has zero feedback today, so this exercises the
+      // same empty-scope path buildFeedbackScopeFilter/getFeedbackByMonth
+      // share with every other getFeedbackBy* helper: an unreachable
+      // departmentId (a fresh ObjectId matching nothing) via a direct
+      // service-level check, avoiding a brittle "delete all data" setup.
+      const { buildFeedbackScopeFilter, getFeedbackByMonth } = await import('../../src/services/analyticsService.js');
+      const emptyFilter = buildFeedbackScopeFilter(
+        { role: 'department_head', departmentId: null },
+        {},
+      );
+      expect(emptyFilter).toBeNull();
+      expect(await getFeedbackByMonth(emptyFilter)).toEqual([]);
+    });
+  });
+
   describe('recent activity', () => {
     it('returns at most 5 sessions, most recent first, with no edit-related fields', async () => {
       const res = await getSummary(roles.superAdmin.token);

@@ -52,10 +52,32 @@ async function assertLocationNotAlreadyAssigned(locationId, excludeSurveyId) {
  * section) see Global surveys (departmentId: null) plus their own
  * department's surveys — never another department's. Super Admin sees
  * everything and may optionally narrow by departmentId/locationId.
+ *
+ * `includeGlobal` (default `false`, opt-in only — the Surveys module's own
+ * page and its tested contract, `backend/tests/surveys/read.test.js`'s
+ * "supports the departmentId filter for Super Admin", rely on the default
+ * strict-equality behavior: a Super Admin's own departmentId narrowing on
+ * *this* module is a Survey-ownership browse, "surveys this department
+ * owns"). V2.1.1: Reports opts into `includeGlobal: true` for its Active
+ * Surveys/Survey Performance sections specifically, because a department's
+ * *feedback* can legitimately come from a Global survey (ADR-028 —
+ * FeedbackSession.departmentId, never Survey.departmentId, is the
+ * attribution source of truth) and Reports' visibility there should match
+ * what a Department Head/Personnel of that same department already sees
+ * (the `$or` branch just below, unaffected by this flag).
  */
 export async function listSurveys(
   user,
-  { departmentId, locationId, isPublished, isArchived, search, page = 1, limit = 20 } = {},
+  {
+    departmentId,
+    locationId,
+    isPublished,
+    isArchived,
+    search,
+    page = 1,
+    limit = 20,
+    includeGlobal = false,
+  } = {},
 ) {
   const filter = {};
   const andConditions = [];
@@ -67,7 +89,11 @@ export async function listSurveys(
           { field: 'departmentId', message: 'Invalid department id.' },
         ]);
       }
-      filter.departmentId = departmentId;
+      if (includeGlobal) {
+        andConditions.push({ $or: [{ departmentId: null }, { departmentId }] });
+      } else {
+        filter.departmentId = departmentId;
+      }
     }
   } else if (user.departmentId) {
     andConditions.push({ $or: [{ departmentId: null }, { departmentId: user.departmentId }] });

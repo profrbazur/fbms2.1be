@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import FeedbackSession from '../models/FeedbackSession.js';
 import FeedbackAnswer from '../models/FeedbackAnswer.js';
 import Department from '../models/Department.js';
@@ -27,6 +28,11 @@ export const VALID_TREND_DAYS = [7, 30];
 // caller cannot force a multi-year, day-by-day zero-filled series in one
 // request — no scenario in this phase's UI needs more than a year.
 export const MAX_TREND_RANGE_DAYS = 366;
+// Same finite-range reasoning as MAX_TREND_RANGE_DAYS, one bucket size up
+// — Dashboard's Monthly Feedback Breakdown (Issue 4, V2.1.1) spans from
+// the earliest in-scope session's month through the current month, capped
+// here so a multi-year-old dataset can't force an unbounded series.
+export const MAX_MONTHLY_BREAKDOWN_MONTHS = 12;
 
 /**
  * Same one-line department-scoping idiom already repeated identically in
@@ -36,6 +42,15 @@ export const MAX_TREND_RANGE_DAYS = 366;
  * narrowing filter); Department Head/Personnel are always pinned to their
  * own `user.departmentId`, matching every other module's established
  * pattern — a client-supplied `departmentId` can never widen their scope.
+ *
+ * V2.1.1 bugfix: always returns a real `mongoose.Types.ObjectId`, never a
+ * raw string. `Model.aggregate()` pipelines (unlike `.find()`/
+ * `.countDocuments()`) receive no schema-based auto-casting, so a `$match`
+ * comparing a query-string `departmentId` against a BSON ObjectId field
+ * silently matched zero documents — this filter object feeds both kinds
+ * of query (see every `getFeedbackBy*`/`getRatingDistribution`/
+ * `getAverageRating` aggregation below), so it must already be the right
+ * BSON type before either consumer sees it.
  */
 export function buildFeedbackScopeFilter(user, { departmentId } = {}) {
   if (user.role === 'super_admin') {
@@ -45,11 +60,11 @@ export function buildFeedbackScopeFilter(user, { departmentId } = {}) {
         { field: 'departmentId', message: 'Invalid department id.' },
       ]);
     }
-    return { departmentId };
+    return { departmentId: new mongoose.Types.ObjectId(departmentId) };
   }
 
   if (!user.departmentId) return null;
-  return { departmentId: user.departmentId };
+  return { departmentId: new mongoose.Types.ObjectId(user.departmentId) };
 }
 
 /**
@@ -94,7 +109,7 @@ export function buildReportFilter(user, { departmentId, locationId, surveyId, da
         { field: 'locationId', message: 'Invalid location id.' },
       ]);
     }
-    filter.locationId = locationId;
+    filter.locationId = new mongoose.Types.ObjectId(locationId);
   }
 
   if (surveyId) {
@@ -103,7 +118,7 @@ export function buildReportFilter(user, { departmentId, locationId, surveyId, da
         { field: 'surveyId', message: 'Invalid survey id.' },
       ]);
     }
-    filter.surveyId = surveyId;
+    filter.surveyId = new mongoose.Types.ObjectId(surveyId);
   }
 
   const dateRange = buildDateRangeFilter(dateFrom, dateTo);
@@ -191,6 +206,23 @@ async function getDefaultTrendWindowDays() {
 }
 
 /**
+ * Resolves the effective 7/30-day rolling window `getFeedbackTrend` falls
+ * back to when no explicit custom date range is supplied. Extracted so
+ * `applyDefaultAnalysisWindow` (Issue 3 fix, V2.1.1) can apply the exact
+ * same window to Rating Distribution — both charts share one definition of
+ * "the last N days" rather than two independently-computed ones drifting
+ * apart.
+ */
+async function resolveRollingWindowDates(days) {
+  const trendDays = VALID_TREND_DAYS.includes(days) ? days : await getDefaultTrendWindowDays();
+  const endDate = new Date();
+  endDate.setUTCHours(0, 0, 0, 0);
+  const startDate = new Date(endDate);
+  startDate.setUTCDate(startDate.getUTCDate() - (trendDays - 1));
+  return { startDate, endDate };
+}
+
+/**
  * Daily feedback-submission counts, gaps filled with 0 so a chart is a
  * continuous trend line rather than skipping days with no submissions.
  * Supports three modes (Reports' "Last 7 days / Last 30 days / Custom
@@ -227,11 +259,7 @@ export async function getFeedbackTrend(filter, { days, dateFrom, dateTo } = {}) 
       ]);
     }
   } else {
-    const trendDays = VALID_TREND_DAYS.includes(days) ? days : await getDefaultTrendWindowDays();
-    endDate = new Date();
-    endDate.setUTCHours(0, 0, 0, 0);
-    startDate = new Date(endDate);
-    startDate.setUTCDate(startDate.getUTCDate() - (trendDays - 1));
+    ({ startDate, endDate } = await resolveRollingWindowDates(days));
   }
 
   const rangeEndExclusive = new Date(endDate);
@@ -258,6 +286,36 @@ export async function getFeedbackTrend(filter, { days, dateFrom, dateTo } = {}) 
   }
 
   return trend;
+}
+
+/**
+ * Issue 3 fix (V2.1.1): Reports' Overview tab pairs Feedback Trend with
+ * Rating Distribution under one shared "Analysis Period" (7/30 days)
+ * control — but Rating Distribution's own `filter` (built by
+ * `buildReportFilter`) previously carried no date bound at all unless the
+ * caller had already selected an explicit custom date range, so it always
+ * showed all-time data regardless of the 7/30-day toggle, silently
+ * inconsistent with whatever Feedback Trend was showing next to it.
+ *
+ * When the caller has *not* selected an explicit custom range (`dateFrom`/
+ * `dateTo` both absent — the toggle's only visible state, matching the
+ * frontend hiding it once a custom range is set), this applies the exact
+ * same rolling window `getFeedbackTrend` falls back to. When a custom
+ * range (full or single-sided) is already selected, `filter` already
+ * carries that scoping via `buildReportFilter`/`buildDateRangeFilter`
+ * (ADR-041's existing, deliberate semantics) and is returned unchanged —
+ * this never overrides an explicit filter, only fills the "no date
+ * scoping at all" gap.
+ */
+export async function applyDefaultAnalysisWindow(filter, { days, dateFrom, dateTo } = {}) {
+  if (filter === null) return null;
+  if (dateFrom || dateTo) return filter;
+
+  const { startDate, endDate } = await resolveRollingWindowDates(days);
+  const rangeEndExclusive = new Date(endDate);
+  rangeEndExclusive.setUTCDate(rangeEndExclusive.getUTCDate() + 1);
+
+  return { ...filter, submittedAt: { $gte: startDate, $lt: rangeEndExclusive } };
 }
 
 /**
@@ -397,4 +455,66 @@ export async function getFeedbackByLocation(filter) {
       count: row.count,
     }))
     .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Monthly feedback-submission counts — Dashboard's Monthly Feedback
+ * Breakdown (Issue 4, V2.1.1), the same zero-filled-gap idea
+ * `getFeedbackTrend` applies daily, one bucket size up. Spans from the
+ * earliest in-scope `FeedbackSession`'s month through the current month
+ * (capped at `MAX_MONTHLY_BREAKDOWN_MONTHS`) — deliberately *not* a
+ * hardcoded demo-specific date range, so it reflects whatever historical
+ * data actually exists in scope and keeps working as real data accrues.
+ * Returns `[]` (not a single zero-filled bucket) when no feedback exists
+ * in scope yet, matching every other `getFeedbackBy*` empty-scope
+ * convention here.
+ */
+export async function getFeedbackByMonth(filter) {
+  if (filter === null) return [];
+
+  const [earliest] = await FeedbackSession.aggregate([
+    { $match: filter },
+    { $sort: { submittedAt: 1 } },
+    { $limit: 1 },
+    { $project: { submittedAt: 1 } },
+  ]);
+
+  if (!earliest) return [];
+
+  const now = new Date();
+  const endMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+  let startMonthStart = new Date(
+    Date.UTC(earliest.submittedAt.getUTCFullYear(), earliest.submittedAt.getUTCMonth(), 1),
+  );
+  const earliestAllowedStart = new Date(endMonthStart);
+  earliestAllowedStart.setUTCMonth(earliestAllowedStart.getUTCMonth() - (MAX_MONTHLY_BREAKDOWN_MONTHS - 1));
+  if (startMonthStart.getTime() < earliestAllowedStart.getTime()) {
+    startMonthStart = earliestAllowedStart;
+  }
+
+  const rangeEndExclusive = new Date(endMonthStart);
+  rangeEndExclusive.setUTCMonth(rangeEndExclusive.getUTCMonth() + 1);
+
+  const rows = await FeedbackSession.aggregate([
+    { $match: { ...filter, submittedAt: { $gte: startMonthStart, $lt: rangeEndExclusive } } },
+    {
+      $group: {
+        _id: { $dateToString: { format: '%Y-%m', date: '$submittedAt' } },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const countByMonth = new Map(rows.map((row) => [row._id, row.count]));
+
+  const months = [];
+  const cursor = new Date(startMonthStart);
+  while (cursor.getTime() <= endMonthStart.getTime()) {
+    const key = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}`;
+    months.push({ month: key, count: countByMonth.get(key) ?? 0 });
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+
+  return months;
 }
