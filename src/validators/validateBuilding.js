@@ -1,16 +1,7 @@
 import { ApiError } from '../utils/ApiError.js';
-import { isValidObjectId } from '../utils/isValidObjectId.js';
 import { CODE_PATTERN } from '../utils/validationPatterns.js';
 
-const ALLOWED_FIELDS = ['name', 'code', 'description', 'departmentId', 'buildingId', 'isActive'];
-
-function validateUnknownFields(body, errors) {
-  Object.keys(body)
-    .filter((key) => !ALLOWED_FIELDS.includes(key))
-    .forEach((field) => {
-      errors.push({ field, message: `Unknown field "${field}" is not allowed.` });
-    });
-}
+const ALLOWED_FIELDS = ['name', 'code', 'description', 'isActive'];
 
 function validateFieldTypes(body, errors) {
   if ('name' in body && (typeof body.name !== 'string' || !body.name.trim())) {
@@ -32,24 +23,20 @@ function validateFieldTypes(body, errors) {
     errors.push({ field: 'description', message: 'description must be a string.' });
   }
 
-  if ('departmentId' in body) {
-    if (typeof body.departmentId !== 'string' || !isValidObjectId(body.departmentId)) {
-      errors.push({ field: 'departmentId', message: 'departmentId must be a valid id.' });
-    }
-  }
-
-  if ('buildingId' in body) {
-    if (typeof body.buildingId !== 'string' || !isValidObjectId(body.buildingId)) {
-      errors.push({ field: 'buildingId', message: 'buildingId must be a valid id.' });
-    }
-  }
-
   if ('isActive' in body && typeof body.isActive !== 'boolean') {
     errors.push({ field: 'isActive', message: 'isActive must be a boolean.' });
   }
 }
 
-export function validateLocationCreate(req, res, next) {
+function validateUnknownFields(body, errors) {
+  Object.keys(body)
+    .filter((key) => !ALLOWED_FIELDS.includes(key))
+    .forEach((field) => {
+      errors.push({ field, message: `Unknown field "${field}" is not allowed.` });
+    });
+}
+
+export function validateBuildingCreate(req, res, next) {
   const body = req.body ?? {};
   const errors = [];
 
@@ -63,14 +50,6 @@ export function validateLocationCreate(req, res, next) {
     errors.push({ field: 'code', message: 'code is required.' });
   }
 
-  if (!body.departmentId) {
-    errors.push({ field: 'departmentId', message: 'departmentId is required.' });
-  }
-
-  if (!body.buildingId) {
-    errors.push({ field: 'buildingId', message: 'buildingId is required.' });
-  }
-
   validateFieldTypes(body, errors);
 
   if (errors.length > 0) {
@@ -80,7 +59,7 @@ export function validateLocationCreate(req, res, next) {
   return next();
 }
 
-export function validateLocationUpdate(req, res, next) {
+export function validateBuildingUpdate(req, res, next) {
   const body = req.body ?? {};
   const errors = [];
 

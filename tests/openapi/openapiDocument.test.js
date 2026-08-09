@@ -4,6 +4,7 @@ import { systemPaths } from '../../src/docs/openapi/paths/system.js';
 import { authPaths } from '../../src/docs/openapi/paths/auth.js';
 import { organizationPaths } from '../../src/docs/openapi/paths/organization.js';
 import { departmentsPaths } from '../../src/docs/openapi/paths/departments.js';
+import { buildingsPaths } from '../../src/docs/openapi/paths/buildings.js';
 import { locationsPaths } from '../../src/docs/openapi/paths/locations.js';
 import { personnelPaths } from '../../src/docs/openapi/paths/personnel.js';
 import { tabletsPaths } from '../../src/docs/openapi/paths/tablets.js';
@@ -23,6 +24,7 @@ const pathModules = [
   authPaths,
   organizationPaths,
   departmentsPaths,
+  buildingsPaths,
   locationsPaths,
   personnelPaths,
   tabletsPaths,
@@ -72,6 +74,7 @@ describe('OpenAPI document structure', () => {
       'Pagination',
       'User',
       'Department',
+      'Building',
       'Location',
       'Personnel',
       'Tablet',

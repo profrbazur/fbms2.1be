@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { connectDatabase } from '../config/database.js';
 import { seedUsers } from './userSeeder.js';
-import { seedOrganizationSettings, seedLocations } from './organizationSeeder.js';
+import { seedOrganizationSettings, seedBuildings, seedLocations } from './organizationSeeder.js';
 import { seedPersonnel } from './personnelSeeder.js';
 import { seedTablets } from './tabletSeeder.js';
 import { seedSurveys } from './surveySeeder.js';
@@ -12,6 +12,7 @@ async function run() {
 
   const result = await seedUsers();
   await seedOrganizationSettings();
+  const buildingResult = await seedBuildings();
   const locationResult = await seedLocations();
   const personnelResult = await seedPersonnel();
   const tabletResult = await seedTablets();
@@ -23,6 +24,7 @@ async function run() {
   );
   result.seededEmails.forEach((email) => console.log(` - ${email}`));
   console.log('Seeded 1 organization settings record.');
+  console.log(`Seeded ${buildingResult.buildingCount} building(s).`);
   console.log(`Seeded ${locationResult.locationCount} location(s).`);
   console.log(`Seeded ${personnelResult.personnelCount} personnel record(s).`);
   console.log(`Seeded ${tabletResult.tabletCount} tablet(s).`);

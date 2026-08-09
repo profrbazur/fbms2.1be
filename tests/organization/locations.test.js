@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import app from '../../src/app.js';
 import Department from '../../src/models/Department.js';
+import Building from '../../src/models/Building.js';
 import Location from '../../src/models/Location.js';
 import { resetAndSeed } from '../utils/seedTestUsers.js';
 import { loginAllSeededRoles } from '../utils/authTokens.js';
@@ -32,12 +33,18 @@ const patchLocation = (token, id, body) =>
 let roles;
 let registrarDept;
 let libraryDept;
+let taftBuilding;
+let dacBuilding;
+let atriumBuilding;
 
 beforeAll(async () => {
   await resetAndSeed();
   roles = await loginAllSeededRoles();
   registrarDept = await Department.findOne({ code: 'REG' });
   libraryDept = await Department.findOne({ code: 'LIB' });
+  taftBuilding = await Building.findOne({ code: 'TAFT' });
+  dacBuilding = await Building.findOne({ code: 'DAC' });
+  atriumBuilding = await Building.findOne({ code: 'ATRIUM' });
 });
 
 afterAll(async () => {
@@ -84,6 +91,22 @@ describe('GET /api/v1/locations', () => {
     ).toBe(true);
   });
 
+  it('a supplied buildingId query cannot escape a non-admin department restriction', async () => {
+    // atriumBuilding only hosts a Library-owned location (LIB-LOC-01) in
+    // the seed data — a Registrar Department Head should never be able
+    // to use buildingId to see into another department's location,
+    // regardless of which building it names.
+    const res = await listLocations(
+      roles.registrarHead.token,
+      `?buildingId=${atriumBuilding._id.toString()}`,
+    );
+
+    expect(res.status).toBe(200);
+    expect(
+      res.body.data.locations.every((l) => l.departmentId === registrarDept._id.toString()),
+    ).toBe(true);
+  });
+
   it('supports pagination', async () => {
     const res = await listLocations(roles.superAdmin.token, '?page=1&limit=1');
 
@@ -109,6 +132,26 @@ describe('GET /api/v1/locations', () => {
     expect(
       res.body.data.locations.every((l) => l.departmentId === libraryDept._id.toString()),
     ).toBe(true);
+  });
+
+  it('supports buildingId filtering for Super Admin', async () => {
+    const res = await listLocations(
+      roles.superAdmin.token,
+      `?buildingId=${taftBuilding._id.toString()}`,
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.locations.length).toBeGreaterThan(0);
+    expect(
+      res.body.data.locations.every((l) => l.buildingId === taftBuilding._id.toString()),
+    ).toBe(true);
+  });
+
+  it('every returned location includes a valid buildingId', async () => {
+    const res = await listLocations(roles.superAdmin.token);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.locations.every((l) => Boolean(l.buildingId))).toBe(true);
   });
 
   it('returns an empty result set safely', async () => {
@@ -138,10 +181,12 @@ describe('POST /api/v1/locations', () => {
       name: 'Registrar Annex Counter',
       code: 'REG-LOC-99',
       departmentId: registrarDept._id.toString(),
+      buildingId: taftBuilding._id.toString(),
     });
 
     expect(res.status).toBe(201);
     expect(res.body.data.location.code).toBe('REG-LOC-99');
+    expect(res.body.data.location.buildingId).toBe(taftBuilding._id.toString());
   });
 
   it('rejects non-Super Admin creation with 403', async () => {
@@ -149,6 +194,7 @@ describe('POST /api/v1/locations', () => {
       name: 'Should Fail',
       code: 'FAIL-LOC-01',
       departmentId: registrarDept._id.toString(),
+      buildingId: taftBuilding._id.toString(),
     });
     expect(res.status).toBe(403);
   });
@@ -158,6 +204,7 @@ describe('POST /api/v1/locations', () => {
       name: 'Invalid Dept Location',
       code: 'BAD-LOC-01',
       departmentId: 'not-a-valid-id',
+      buildingId: taftBuilding._id.toString(),
     });
     expect(res.status).toBe(400);
   });
@@ -167,6 +214,7 @@ describe('POST /api/v1/locations', () => {
       name: 'Missing Dept Location',
       code: 'BAD-LOC-02',
       departmentId: '507f1f77bcf86cd799439011',
+      buildingId: taftBuilding._id.toString(),
     });
     expect(res.status).toBe(400);
   });
@@ -182,6 +230,44 @@ describe('POST /api/v1/locations', () => {
       name: 'Should Fail Inactive',
       code: 'BAD-LOC-03',
       departmentId: inactiveDept._id.toString(),
+      buildingId: taftBuilding._id.toString(),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects an invalid building id with 400', async () => {
+    const res = await createLocation(roles.superAdmin.token, {
+      name: 'Invalid Building Location',
+      code: 'BAD-LOC-04',
+      departmentId: registrarDept._id.toString(),
+      buildingId: 'not-a-valid-id',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a nonexistent building id with 400', async () => {
+    const res = await createLocation(roles.superAdmin.token, {
+      name: 'Missing Building Location',
+      code: 'BAD-LOC-05',
+      departmentId: registrarDept._id.toString(),
+      buildingId: '507f1f77bcf86cd799439011',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects assignment to an inactive building with 400', async () => {
+    const inactiveBuilding = await Building.create({
+      name: 'Inactive For Location Test',
+      code: 'INACTB1',
+      isActive: false,
+    });
+
+    const res = await createLocation(roles.superAdmin.token, {
+      name: 'Should Fail Inactive Building',
+      code: 'BAD-LOC-06',
+      departmentId: registrarDept._id.toString(),
+      buildingId: inactiveBuilding._id.toString(),
     });
 
     expect(res.status).toBe(400);
@@ -192,6 +278,7 @@ describe('POST /api/v1/locations', () => {
       name: 'Duplicate Code Attempt',
       code: 'reg-loc-01',
       departmentId: registrarDept._id.toString(),
+      buildingId: taftBuilding._id.toString(),
     });
     expect(res.status).toBe(409);
   });
@@ -203,6 +290,7 @@ describe('POST /api/v1/locations', () => {
     expect(res.body.errors.some((e) => e.field === 'name')).toBe(true);
     expect(res.body.errors.some((e) => e.field === 'code')).toBe(true);
     expect(res.body.errors.some((e) => e.field === 'departmentId')).toBe(true);
+    expect(res.body.errors.some((e) => e.field === 'buildingId')).toBe(true);
   });
 
   it('rejects an unauthenticated request with 401', async () => {
@@ -210,6 +298,7 @@ describe('POST /api/v1/locations', () => {
       name: 'X',
       code: 'X-LOC-1',
       departmentId: registrarDept._id.toString(),
+      buildingId: taftBuilding._id.toString(),
     });
     expect(res.status).toBe(401);
   });
@@ -221,6 +310,7 @@ describe('PATCH /api/v1/locations/:id', () => {
       name: 'Patchable Location',
       code: 'PATCH-LOC-01',
       departmentId: registrarDept._id.toString(),
+      buildingId: taftBuilding._id.toString(),
     });
     const id = created.body.data.location._id;
 
@@ -255,6 +345,7 @@ describe('PATCH /api/v1/locations/:id', () => {
       name: 'Reassignable Location',
       code: 'REASSIGN-LOC-01',
       departmentId: registrarDept._id.toString(),
+      buildingId: taftBuilding._id.toString(),
     });
     const id = created.body.data.location._id;
 
@@ -266,11 +357,53 @@ describe('PATCH /api/v1/locations/:id', () => {
     expect(res.body.data.location.departmentId).toBe(libraryDept._id.toString());
   });
 
+  it('allows reassigning a location to a different active building', async () => {
+    const created = await createLocation(roles.superAdmin.token, {
+      name: 'Reassignable Building Location',
+      code: 'REASSIGN-LOC-02',
+      departmentId: registrarDept._id.toString(),
+      buildingId: taftBuilding._id.toString(),
+    });
+    const id = created.body.data.location._id;
+
+    const res = await patchLocation(roles.superAdmin.token, id, {
+      buildingId: dacBuilding._id.toString(),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.location.buildingId).toBe(dacBuilding._id.toString());
+  });
+
+  it('rejects reassigning a location to an inactive building with 400', async () => {
+    const inactiveBuilding = await Building.create({
+      name: 'Inactive For Location Update Test',
+      code: 'INACTB2',
+      isActive: false,
+    });
+    const created = await createLocation(roles.superAdmin.token, {
+      name: 'Location For Inactive Building Update',
+      code: 'REASSIGN-LOC-03',
+      departmentId: registrarDept._id.toString(),
+      buildingId: taftBuilding._id.toString(),
+    });
+    const id = created.body.data.location._id;
+
+    const res = await patchLocation(roles.superAdmin.token, id, {
+      buildingId: inactiveBuilding._id.toString(),
+    });
+
+    expect(res.status).toBe(400);
+
+    const unchanged = await Location.findById(id);
+    expect(unchanged.buildingId.toString()).toBe(taftBuilding._id.toString());
+  });
+
   it('allows changing a location code to a new, unused value', async () => {
     const created = await createLocation(roles.superAdmin.token, {
       name: 'Renamable Code Location',
       code: 'RENAME-LOC-OLD',
       departmentId: registrarDept._id.toString(),
+      buildingId: taftBuilding._id.toString(),
     });
     const id = created.body.data.location._id;
 

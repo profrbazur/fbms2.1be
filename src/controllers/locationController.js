@@ -10,10 +10,11 @@ import { recordAuditEvent, resolveLifecycleAction } from '../services/auditServi
 import { parseBooleanQueryParam } from '../utils/parseBooleanQueryParam.js';
 
 export const getLocations = asyncHandler(async function getLocations(req, res) {
-  const { departmentId, isActive, search, page, limit } = req.query;
+  const { departmentId, buildingId, isActive, search, page, limit } = req.query;
 
   const { locations, pagination } = await listLocations(req.user, {
     departmentId,
+    buildingId,
     isActive: parseBooleanQueryParam(isActive),
     search,
     page,

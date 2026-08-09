@@ -58,6 +58,7 @@ beforeAll(async () => {
       name: 'Audit Test Location',
       code: 'AUD-LOC-01',
       departmentId: registrarDept._id.toString(),
+      buildingId: registrarLoc1.buildingId.toString(),
     });
 
   const personnelRes = await request(app)

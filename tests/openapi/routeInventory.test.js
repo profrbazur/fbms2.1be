@@ -26,8 +26,16 @@ describe('API inventory regression (Express routes vs. OpenAPI paths)', () => {
     expect(undocumentedExtras, 'OpenAPI paths that do not correspond to a real route').toEqual([]);
   });
 
-  it('matches the previously-frozen 53-endpoint count (Version 1 API freeze, ADR-051/ADR-052)', () => {
-    expect(ROUTE_INVENTORY.length).toBe(53);
+  /**
+   * The Version 1 API freeze (ADR-051/ADR-052) recorded 53 endpoints at
+   * the time. docs/v2/V2_API_VERSIONING.md's "Additive Changes" policy
+   * explicitly allows new, backward-compatible endpoints to remain
+   * under /api/v1 — V2.3 added 4 Building endpoints
+   * (GET/POST /buildings, GET/PATCH /buildings/{id}) on top of that
+   * frozen baseline without changing any existing route's contract.
+   */
+  it('matches the current endpoint count (53 frozen V1 + 4 additive V2.3 Building endpoints)', () => {
+    expect(ROUTE_INVENTORY.length).toBe(57);
   });
 
   /**
