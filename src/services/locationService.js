@@ -3,6 +3,7 @@ import Department from '../models/Department.js';
 import { ApiError } from '../utils/ApiError.js';
 import { isValidObjectId } from '../utils/isValidObjectId.js';
 import { escapeRegExp } from '../utils/escapeRegExp.js';
+import { isGlobalReadRole } from '../utils/roleScope.js';
 
 /**
  * Department Head/Personnel are always pinned to their own department and
@@ -17,7 +18,7 @@ export async function listLocations(
 ) {
   const filter = {};
 
-  if (user.role === 'super_admin') {
+  if (isGlobalReadRole(user.role)) {
     if (departmentId) {
       if (!isValidObjectId(departmentId)) {
         throw new ApiError(400, 'departmentId must be a valid id.', [
@@ -73,7 +74,7 @@ export async function getLocationById(user, id) {
     throw new ApiError(404, 'Location not found.');
   }
 
-  if (user.role !== 'super_admin') {
+  if (!isGlobalReadRole(user.role)) {
     const ownDepartmentId = user.departmentId ? user.departmentId.toString() : null;
     const belongsToOwnDepartment = ownDepartmentId === location.departmentId.toString();
 

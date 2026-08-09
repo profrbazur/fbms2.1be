@@ -15,16 +15,17 @@ async function loginAs(email) {
  * four login calls. Returns the token + sanitized user for each.
  */
 export async function loginAllSeededRoles() {
-  const [superAdmin, registrarHead, libraryHead, registrarStaff, libraryStaff] =
+  const [superAdmin, registrarHead, libraryHead, registrarStaff, libraryStaff, seniorLeadership] =
     await Promise.all([
       loginAs('superadmin@fbms.test'),
       loginAs('registrar.head@fbms.test'),
       loginAs('library.head@fbms.test'),
       loginAs('registrar.staff1@fbms.test'),
       loginAs('library.staff1@fbms.test'),
+      loginAs('leadership1@fbms.test'),
     ]);
 
-  return { superAdmin, registrarHead, libraryHead, registrarStaff, libraryStaff };
+  return { superAdmin, registrarHead, libraryHead, registrarStaff, libraryStaff, seniorLeadership };
 }
 
 export { loginAs };

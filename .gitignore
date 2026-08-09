@@ -38,3 +38,5 @@ Thumbs.db
 *.gz
 *.tmp
 *.temp
+
+docs/

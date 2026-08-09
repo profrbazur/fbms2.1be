@@ -22,11 +22,11 @@ import { connectTestDb, clearCollections } from './testDb.js';
 
 /**
  * Resets the test database to a known, freshly-seeded state. Safe to
- * call from any test file's beforeAll — each file gets the same 9
- * users/2 departments/1 organization settings record/4 locations/8
- * personnel records/4 tablets/3 surveys/10 feedback sessions regardless
- * of what other files did, satisfying "tests must not depend on
- * execution order."
+ * call from any test file's beforeAll — each file gets the same 11
+ * users (9 original + 2 V2.2 Senior Leadership)/2 departments/1
+ * organization settings record/4 locations/8 personnel records/4
+ * tablets/3 surveys/10 feedback sessions regardless of what other files
+ * did, satisfying "tests must not depend on execution order."
  */
 export async function resetAndSeed() {
   await connectTestDb();
