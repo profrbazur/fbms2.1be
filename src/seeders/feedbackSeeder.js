@@ -164,6 +164,17 @@ const FEEDBACK_SESSIONS = [
 ];
 
 /**
+ * The full set of reference codes this seeder owns — the small,
+ * deterministic V2 Development Dataset baseline (see
+ * backend/dev-data/README.md). generateCanonicalDataset.js's
+ * REFERENCE_CODE_START = 11 continues numbering directly after these,
+ * so this list is also the boundary seedDevelopmentDataset.js uses to
+ * safely strip any larger canonical/demo bulk data back down to just
+ * this baseline without touching this module's own definitions.
+ */
+export const SEEDED_REFERENCE_CODES = FEEDBACK_SESSIONS.map((definition) => definition.referenceCode);
+
+/**
  * Idempotent: each session is matched/upserted by its unique
  * `referenceCode` (the seeder's own stable business key, same
  * convention as Survey's title-matching — see surveySeeder.js); each
