@@ -5,7 +5,7 @@ import { connectDatabase } from '../config/database.js';
 import FeedbackSession from '../models/FeedbackSession.js';
 import FeedbackAnswer from '../models/FeedbackAnswer.js';
 import { seedUsers } from './userSeeder.js';
-import { seedOrganizationSettings, seedLocations } from './organizationSeeder.js';
+import { seedOrganizationSettings, seedBuildings, seedLocations } from './organizationSeeder.js';
 import { seedPersonnel } from './personnelSeeder.js';
 import { seedTablets } from './tabletSeeder.js';
 import { seedSurveys } from './surveySeeder.js';
@@ -78,6 +78,7 @@ export async function seedDevelopmentDataset() {
 
   const userResult = await seedUsers();
   await seedOrganizationSettings();
+  const buildingResult = await seedBuildings();
   const locationResult = await seedLocations();
   const personnelResult = await seedPersonnel();
   const tabletResult = await seedTablets();
@@ -89,6 +90,7 @@ export async function seedDevelopmentDataset() {
     removedStaleAnswers: removedAnswers,
     departmentCount: userResult.departmentCount,
     userCount: userResult.userCount,
+    buildingCount: buildingResult.buildingCount,
     locationCount: locationResult.locationCount,
     personnelCount: personnelResult.personnelCount,
     tabletCount: tabletResult.tabletCount,
@@ -114,6 +116,7 @@ async function run() {
     );
   }
   console.log(`Departments: ${result.departmentCount}, Users: ${result.userCount}`);
+  console.log(`Buildings: ${result.buildingCount}`);
   console.log(`Locations: ${result.locationCount}, Personnel: ${result.personnelCount}, Tablets: ${result.tabletCount}`);
   console.log(`Surveys: ${result.surveyCount} (${result.questionCount} questions)`);
   console.log(`Feedback sessions: ${result.sessionCount} (${result.answerCount} answers)`);

@@ -121,6 +121,7 @@ describe('POST /api/v1/tablets', () => {
       name: 'Inactive For Tablet Test',
       code: 'INACT-LOC-01',
       departmentId: registrarLoc1.departmentId,
+      buildingId: registrarLoc1.buildingId,
       isActive: false,
     });
 
@@ -243,6 +244,7 @@ describe('PATCH /api/v1/tablets/:id', () => {
       name: 'Inactive For Tablet Update Test',
       code: 'INACT-LOC-02',
       departmentId: registrarLoc2.departmentId,
+      buildingId: registrarLoc2.buildingId,
       isActive: false,
     });
 

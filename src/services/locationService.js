@@ -4,6 +4,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { isValidObjectId } from '../utils/isValidObjectId.js';
 import { escapeRegExp } from '../utils/escapeRegExp.js';
 import { isGlobalReadRole } from '../utils/roleScope.js';
+import { assertBuildingIsUsable } from './buildingService.js';
 
 /**
  * Department Head/Personnel are always pinned to their own department and
@@ -14,7 +15,7 @@ import { isGlobalReadRole } from '../utils/roleScope.js';
  */
 export async function listLocations(
   user,
-  { departmentId, isActive, search, page = 1, limit = 20 } = {},
+  { departmentId, buildingId, isActive, search, page = 1, limit = 20 } = {},
 ) {
   const filter = {};
 
@@ -26,6 +27,14 @@ export async function listLocations(
         ]);
       }
       filter.departmentId = departmentId;
+    }
+    if (buildingId) {
+      if (!isValidObjectId(buildingId)) {
+        throw new ApiError(400, 'buildingId must be a valid id.', [
+          { field: 'buildingId', message: 'Invalid building id.' },
+        ]);
+      }
+      filter.buildingId = buildingId;
     }
     if (isActive !== undefined) {
       filter.isActive = isActive;
@@ -154,9 +163,10 @@ async function assertNoDuplicateCode(code, excludeId) {
 }
 
 export async function createLocation(payload) {
-  const { name, code, description = '', departmentId, isActive = true } = payload;
+  const { name, code, description = '', departmentId, buildingId, isActive = true } = payload;
 
   await assertDepartmentIsUsable(departmentId);
+  await assertBuildingIsUsable(buildingId);
   await assertNoDuplicateCode(code);
 
   const location = await Location.create({
@@ -164,6 +174,7 @@ export async function createLocation(payload) {
     code: code.trim().toUpperCase(),
     description,
     departmentId,
+    buildingId,
     isActive,
   });
 
@@ -185,6 +196,10 @@ export async function updateLocation(id, updates) {
     await assertDepartmentIsUsable(updates.departmentId);
   }
 
+  if (updates.buildingId !== undefined) {
+    await assertBuildingIsUsable(updates.buildingId);
+  }
+
   if (updates.code !== undefined) {
     await assertNoDuplicateCode(updates.code, location._id);
     location.code = updates.code.trim().toUpperCase();
@@ -193,6 +208,7 @@ export async function updateLocation(id, updates) {
   if (updates.name !== undefined) location.name = updates.name.trim();
   if (updates.description !== undefined) location.description = updates.description;
   if (updates.departmentId !== undefined) location.departmentId = updates.departmentId;
+  if (updates.buildingId !== undefined) location.buildingId = updates.buildingId;
   if (updates.isActive !== undefined) location.isActive = updates.isActive;
 
   await location.save();

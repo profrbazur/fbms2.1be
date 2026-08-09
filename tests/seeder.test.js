@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import Department from '../src/models/Department.js';
 import User from '../src/models/User.js';
 import OrganizationSettings from '../src/models/OrganizationSettings.js';
+import Building from '../src/models/Building.js';
 import Location from '../src/models/Location.js';
 import Personnel from '../src/models/Personnel.js';
 import Tablet from '../src/models/Tablet.js';
@@ -13,6 +14,7 @@ import FeedbackAnswer from '../src/models/FeedbackAnswer.js';
 import { seedUsers, DEFAULT_PASSWORD } from '../src/seeders/userSeeder.js';
 import {
   seedOrganizationSettings,
+  seedBuildings,
   seedLocations,
 } from '../src/seeders/organizationSeeder.js';
 import { seedPersonnel } from '../src/seeders/personnelSeeder.js';
@@ -28,6 +30,7 @@ beforeAll(async () => {
     User,
     Department,
     OrganizationSettings,
+    Building,
     Location,
     Personnel,
     Tablet,
@@ -116,18 +119,43 @@ describe('organizationSeeder', () => {
     expect(await OrganizationSettings.countDocuments()).toBe(1);
   });
 
-  it('seeds locations distributed across Registrar and Library, idempotently', async () => {
+  it('seeds the 5 known Benilde buildings, idempotently', async () => {
+    const firstRun = await seedBuildings();
+    await seedBuildings();
+    await seedBuildings();
+
+    expect(firstRun.buildingCount).toBe(5);
+    expect(await Building.countDocuments()).toBe(5);
+  });
+
+  it('has no duplicate building codes', async () => {
+    const buildings = await Building.find().select('code');
+    const codes = buildings.map((b) => b.code);
+
+    expect(new Set(codes).size).toBe(codes.length);
+  });
+
+  it('seeds locations distributed across Registrar/Library and multiple buildings, idempotently', async () => {
     const firstRun = await seedLocations();
     await seedLocations();
     await seedLocations();
 
-    const locations = await Location.find().populate('departmentId', 'code');
+    const locations = await Location.find()
+      .populate('departmentId', 'code')
+      .populate('buildingId', 'code');
     const departmentCodes = new Set(locations.map((l) => l.departmentId.code));
+    const buildingCodes = new Set(locations.map((l) => l.buildingId.code));
 
     expect(firstRun.locationCount).toBeGreaterThan(0);
     expect(await Location.countDocuments()).toBe(firstRun.locationCount);
     expect(departmentCodes.has('REG')).toBe(true);
     expect(departmentCodes.has('LIB')).toBe(true);
+    // Registrar's own two seeded locations deliberately span two
+    // different buildings — see organizationSeeder.js's LOCATIONS data.
+    expect(buildingCodes.size).toBeGreaterThan(1);
+    locations.forEach((location) => {
+      expect(location.buildingId).toBeTruthy();
+    });
   });
 
   it('has no duplicate location codes', async () => {

@@ -101,6 +101,7 @@ describe('POST /api/v1/surveys', () => {
       name: 'Registrar Annex (Survey Write Test)',
       code: 'REG-LOC-99-SURVEY',
       departmentId: registrarDept._id,
+      buildingId: registrarLoc1.buildingId,
       isActive: true,
     });
 
@@ -141,6 +142,7 @@ describe('POST /api/v1/surveys', () => {
       name: 'Inactive For Survey Test',
       code: 'INACT-LOC-SURVEY',
       departmentId: registrarDept._id,
+      buildingId: registrarLoc1.buildingId,
       isActive: false,
     });
 
@@ -241,6 +243,7 @@ describe('PATCH /api/v1/surveys/:id', () => {
       name: 'Registrar Annex 2 (Survey Write Test)',
       code: 'REG-LOC-98-SURVEY',
       departmentId: registrarDept._id,
+      buildingId: registrarLoc1.buildingId,
       isActive: true,
     });
     const target = await Survey.create({ title: 'Reassignable Draft Survey 2' });

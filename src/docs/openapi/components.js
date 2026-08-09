@@ -110,6 +110,13 @@ export const parameters = {
       'Filter by department id. For Department Head/Personnel this is always overridden server-side to their own department; only Super Admin can use it to narrow the result set.',
     schema: { type: 'string' },
   },
+  buildingIdFilter: {
+    name: 'buildingId',
+    in: 'query',
+    description:
+      'Filter locations by building id. Only meaningful for Super Admin/Senior Leadership (global read roles); ignored for Department Head/Personnel, who cannot use it to see outside their own department.',
+    schema: { type: 'string' },
+  },
   idParam: {
     name: 'id',
     in: 'path',
@@ -186,14 +193,29 @@ export const schemas = {
     },
   },
 
+  Building: {
+    type: 'object',
+    description: 'V2.3 — a physical campus/building (docs/v2/V2_3_BUILDING_LOCATION.md). Global master data, not owned by any Department.',
+    properties: {
+      _id: objectId,
+      name: { type: 'string', example: 'Taft Campus' },
+      code: { type: 'string', example: 'TAFT' },
+      description: { type: 'string', example: 'Main Taft Avenue campus.' },
+      isActive: { type: 'boolean', example: true },
+      ...timestamps,
+    },
+  },
+
   Location: {
     type: 'object',
+    description: 'A precise service point/window. As of V2.3, belongs to exactly one Department and one Building.',
     properties: {
       _id: objectId,
       name: { type: 'string', example: 'Registrar Front Desk' },
       code: { type: 'string', example: 'REG-FD' },
       description: { type: 'string', example: '' },
       departmentId: objectId,
+      buildingId: objectId,
       isActive: { type: 'boolean', example: true },
       ...timestamps,
     },

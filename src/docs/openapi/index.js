@@ -25,6 +25,7 @@ import { systemPaths } from './paths/system.js';
 import { authPaths } from './paths/auth.js';
 import { organizationPaths } from './paths/organization.js';
 import { departmentsPaths } from './paths/departments.js';
+import { buildingsPaths } from './paths/buildings.js';
 import { locationsPaths } from './paths/locations.js';
 import { personnelPaths } from './paths/personnel.js';
 import { tabletsPaths } from './paths/tablets.js';
@@ -43,7 +44,8 @@ const tags = [
   { name: 'Authentication', description: 'Staff login/current-user/logout (JWT).' },
   { name: 'Organization', description: 'University profile, branding, and mobile-facing operational settings (singleton).' },
   { name: 'Departments', description: 'Departments master data.' },
-  { name: 'Locations', description: 'Locations/service points master data.' },
+  { name: 'Buildings', description: 'V2.3 — physical campus/building master data (docs/v2/V2_3_BUILDING_LOCATION.md).' },
+  { name: 'Locations', description: 'Locations/service windows master data — each belongs to a Department and, as of V2.3, a Building.' },
   { name: 'Personnel', description: 'Organizational personnel records (separate from User login accounts).' },
   { name: 'Tablets', description: 'Kiosk tablet registration and activation-token lifecycle.' },
   { name: 'Surveys', description: 'Surveys, questions, and the publish/unpublish/archive lifecycle.' },
@@ -62,6 +64,7 @@ const paths = {
   ...authPaths,
   ...organizationPaths,
   ...departmentsPaths,
+  ...buildingsPaths,
   ...locationsPaths,
   ...personnelPaths,
   ...tabletsPaths,

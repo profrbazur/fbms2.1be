@@ -8,6 +8,7 @@ const locationWriteBody = (required) => ({
     code: { type: 'string', example: 'REG-FD', description: '2-20 letters, numbers, hyphens, or underscores.' },
     description: { type: 'string' },
     departmentId: { type: 'string' },
+    buildingId: { type: 'string' },
     isActive: { type: 'boolean' },
   },
 });
@@ -21,6 +22,7 @@ export const locationsPaths = {
       security: [{ bearerAuth: [] }],
       parameters: [
         parameters.departmentIdFilter,
+        parameters.buildingIdFilter,
         parameters.isActiveFilter,
         parameters.search,
         parameters.page,
@@ -53,7 +55,7 @@ export const locationsPaths = {
       description: 'Super Admin only.',
       operationId: 'createLocation',
       security: [{ bearerAuth: [] }],
-      requestBody: { required: true, content: { 'application/json': { schema: locationWriteBody(['name', 'code', 'departmentId']) } } },
+      requestBody: { required: true, content: { 'application/json': { schema: locationWriteBody(['name', 'code', 'departmentId', 'buildingId']) } } },
       responses: {
         201: {
           description: 'Location created successfully.',
