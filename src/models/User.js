@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-export const USER_ROLES = ['super_admin', 'department_head', 'personnel'];
+export const USER_ROLES = ['super_admin', 'department_head', 'personnel', 'senior_leadership'];
 export const AUTH_PROVIDERS = ['local', 'google'];
 const SALT_ROUNDS = 10;
 
@@ -32,8 +32,10 @@ const userSchema = new mongoose.Schema(
     departmentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Department',
-      required: function departmentRequiredUnlessSuperAdmin() {
-        return this.role !== 'super_admin';
+      // V2.2: Senior Leadership is a second global (non-department) role
+      // alongside Super Admin — see backend/docs/v2/V2_BACKEND_ARCHITECTURE.md.
+      required: function departmentRequiredUnlessGlobalRole() {
+        return this.role !== 'super_admin' && this.role !== 'senior_leadership';
       },
       default: null,
     },

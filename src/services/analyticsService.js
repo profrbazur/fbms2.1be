@@ -7,6 +7,7 @@ import Location from '../models/Location.js';
 import { ApiError } from '../utils/ApiError.js';
 import { isValidObjectId } from '../utils/isValidObjectId.js';
 import { parseFilterDate } from '../utils/parseFilterDate.js';
+import { isGlobalReadRole } from '../utils/roleScope.js';
 import { getOrganizationSettings } from './organizationService.js';
 
 /**
@@ -53,7 +54,7 @@ export const MAX_MONTHLY_BREAKDOWN_MONTHS = 12;
  * BSON type before either consumer sees it.
  */
 export function buildFeedbackScopeFilter(user, { departmentId } = {}) {
-  if (user.role === 'super_admin') {
+  if (isGlobalReadRole(user.role)) {
     if (!departmentId) return {};
     if (!isValidObjectId(departmentId)) {
       throw new ApiError(400, 'departmentId must be a valid id.', [

@@ -7,18 +7,26 @@ import { getSettings, updateSettings, uploadSettingsLogo } from '../../controlle
 
 // Mounted at /api/v1/settings (P8.0). Backed by the exact same
 // OrganizationSettings singleton /api/v1/organization already reads and
-// writes (ADR-043) — GET is available to all three roles (Department
-// Head/Personnel read-only); PATCH and the logo upload are Super Admin
-// only. `POST /logo` is a dedicated action endpoint (mirroring the
-// established Tablets/Surveys "action endpoint alongside CRUD" pattern —
-// e.g. POST /tablets/:id/regenerate-token, POST /surveys/:id/publish)
-// rather than a violation of this phase's "No POST" instruction for the
-// settings resource itself — it mutates only the logo fields of the one
-// existing singleton, never creates a second settings document
-// (ADR-044).
+// writes (ADR-043) — GET is available to Super Admin/Department
+// Head/Personnel (Department Head/Personnel read-only); PATCH and the
+// logo upload are Super Admin only. `POST /logo` is a dedicated action
+// endpoint (mirroring the established Tablets/Surveys "action endpoint
+// alongside CRUD" pattern — e.g. POST /tablets/:id/regenerate-token,
+// POST /surveys/:id/publish) rather than a violation of this phase's
+// "No POST" instruction for the settings resource itself — it mutates
+// only the logo fields of the one existing singleton, never creates a
+// second settings document (ADR-044).
+//
+// V2.2: Senior Leadership is explicitly excluded from GET here (unlike
+// every other module's read routes) per
+// backend/docs/v2/V2_2_SENIOR_LEADERSHIP.md's "Must NOT: modify
+// Settings" — System Settings is administrative configuration, not one
+// of the global-visibility resources (Dashboard/Reports/Feedback/Live
+// Monitoring/Organization/Departments/Locations/Personnel/Tablets/
+// Surveys) that role is meant to see.
 const router = Router();
 
-router.get('/', authenticate, getSettings);
+router.get('/', authenticate, authorizeRoles('super_admin', 'department_head', 'personnel'), getSettings);
 router.patch('/', authenticate, authorizeRoles('super_admin'), validateSettings, updateSettings);
 router.post('/logo', authenticate, authorizeRoles('super_admin'), uploadLogo, uploadSettingsLogo);
 

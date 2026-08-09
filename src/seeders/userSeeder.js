@@ -46,6 +46,21 @@ function buildUserDefinitions(departmentIdByCode) {
       role: 'personnel',
       departmentId: departmentIdByCode.LIB,
     })),
+    // V2.2: two deterministic Senior Leadership accounts — global,
+    // read-only, departmentId: null (same shape as super_admin) — see
+    // backend/docs/v2/V2_2_SENIOR_LEADERSHIP.md's Seed Accounts section.
+    {
+      email: 'leadership1@fbms.test',
+      displayName: 'Senior Leadership 1',
+      role: 'senior_leadership',
+      departmentId: null,
+    },
+    {
+      email: 'leadership2@fbms.test',
+      displayName: 'Senior Leadership 2',
+      role: 'senior_leadership',
+      departmentId: null,
+    },
   ];
 }
 

@@ -4,6 +4,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { isValidObjectId } from '../utils/isValidObjectId.js';
 import { escapeRegExp } from '../utils/escapeRegExp.js';
 import { parsePositiveInt } from '../utils/parsePositiveInt.js';
+import { isGlobalReadRole } from '../utils/roleScope.js';
 import { assertDepartmentIsUsable } from './locationService.js';
 
 const SORT_FIELDS = ['employeeNumber', 'firstName', 'lastName', 'position', 'createdAt'];
@@ -23,7 +24,7 @@ export async function listPersonnel(
 ) {
   const filter = {};
 
-  if (user.role === 'super_admin') {
+  if (isGlobalReadRole(user.role)) {
     if (departmentId) {
       if (!isValidObjectId(departmentId)) {
         throw new ApiError(400, 'departmentId must be a valid id.', [
@@ -91,7 +92,7 @@ export async function getPersonnelById(user, id) {
     throw new ApiError(404, 'Personnel record not found.');
   }
 
-  if (user.role !== 'super_admin') {
+  if (!isGlobalReadRole(user.role)) {
     const ownDepartmentId = user.departmentId ? user.departmentId.toString() : null;
     if (ownDepartmentId !== personnel.departmentId.toString()) {
       throw new ApiError(403, 'You do not have access to this personnel record.');

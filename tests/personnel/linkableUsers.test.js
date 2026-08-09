@@ -37,11 +37,11 @@ describe('GET /api/v1/personnel/linkable-users', () => {
     expect(res.status).toBe(403);
   });
 
-  it('allows Super Admin to retrieve all 9 users with minimal safe fields', async () => {
+  it('allows Super Admin to retrieve all 11 users with minimal safe fields', async () => {
     const res = await getLinkableUsers(roles.superAdmin.token);
 
     expect(res.status).toBe(200);
-    expect(res.body.data.users).toHaveLength(9);
+    expect(res.body.data.users).toHaveLength(11);
 
     const sample = res.body.data.users[0];
     expect(Object.keys(sample).sort()).toEqual(

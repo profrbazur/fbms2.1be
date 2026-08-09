@@ -4,6 +4,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { isValidObjectId } from '../utils/isValidObjectId.js';
 import { escapeRegExp } from '../utils/escapeRegExp.js';
 import { parsePositiveInt } from '../utils/parsePositiveInt.js';
+import { isGlobalReadRole } from '../utils/roleScope.js';
 import { assertDepartmentIsUsable, assertLocationIsUsable } from './locationService.js';
 import { assertValidQuestionFields, nextQuestionOrder } from './questionService.js';
 
@@ -82,7 +83,7 @@ export async function listSurveys(
   const filter = {};
   const andConditions = [];
 
-  if (user.role === 'super_admin') {
+  if (isGlobalReadRole(user.role)) {
     if (departmentId) {
       if (!isValidObjectId(departmentId)) {
         throw new ApiError(400, 'departmentId must be a valid id.', [
@@ -143,7 +144,7 @@ export async function listSurveys(
 }
 
 function assertSurveyVisible(user, survey) {
-  if (user.role === 'super_admin') return;
+  if (isGlobalReadRole(user.role)) return;
 
   const ownDepartmentId = user.departmentId ? user.departmentId.toString() : null;
   const isGlobal = !survey.departmentId;

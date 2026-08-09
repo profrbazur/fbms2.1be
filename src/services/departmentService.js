@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import { ApiError } from '../utils/ApiError.js';
 import { isValidObjectId } from '../utils/isValidObjectId.js';
 import { escapeRegExp } from '../utils/escapeRegExp.js';
+import { isGlobalReadRole } from '../utils/roleScope.js';
 
 async function assertNoDuplicate({ name, code }, excludeId) {
   const orConditions = [];
@@ -35,7 +36,7 @@ async function assertNoDuplicate({ name, code }, excludeId) {
  * req.user by the caller (controller), not trusted input.
  */
 export async function listDepartments(user, { isActive } = {}) {
-  if (user.role === 'super_admin') {
+  if (isGlobalReadRole(user.role)) {
     const filter = {};
     if (isActive !== undefined) {
       filter.isActive = isActive;
@@ -62,7 +63,7 @@ export async function getDepartmentById(user, id) {
     throw new ApiError(404, 'Department not found.');
   }
 
-  if (user.role !== 'super_admin') {
+  if (!isGlobalReadRole(user.role)) {
     const ownDepartmentId = user.departmentId ? user.departmentId.toString() : null;
     if (ownDepartmentId !== department._id.toString()) {
       throw new ApiError(403, 'You do not have access to this department.');

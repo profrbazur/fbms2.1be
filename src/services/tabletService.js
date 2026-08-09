@@ -4,6 +4,7 @@ import { isValidObjectId } from '../utils/isValidObjectId.js';
 import { escapeRegExp } from '../utils/escapeRegExp.js';
 import { generateActivationToken } from '../utils/generateActivationToken.js';
 import { parsePositiveInt } from '../utils/parsePositiveInt.js';
+import { isGlobalReadRole } from '../utils/roleScope.js';
 import { assertLocationIsUsable } from './locationService.js';
 
 const MAX_TOKEN_GENERATION_ATTEMPTS = 5;
@@ -46,7 +47,7 @@ export async function listTablets(
 ) {
   const filter = {};
 
-  if (user.role === 'super_admin') {
+  if (isGlobalReadRole(user.role)) {
     if (departmentId) {
       if (!isValidObjectId(departmentId)) {
         throw new ApiError(400, 'departmentId must be a valid id.', [
@@ -110,7 +111,7 @@ export async function getTabletById(user, id) {
     throw new ApiError(404, 'Tablet not found.');
   }
 
-  if (user.role !== 'super_admin') {
+  if (!isGlobalReadRole(user.role)) {
     const ownDepartmentId = user.departmentId ? user.departmentId.toString() : null;
     if (ownDepartmentId !== tablet.departmentId.toString()) {
       throw new ApiError(403, 'You do not have access to this tablet.');

@@ -73,7 +73,7 @@ beforeAll(async () => {
     });
   createdPersonnelId = personnelRes.body.data.personnel._id;
 
-  // The seeder links 8 of 9 users, so no "linkable-users" candidate is
+  // The seeder links 8 of 11 users, so no "linkable-users" candidate is
   // reliably free — instead, free up an already-linked seeded Registrar
   // record's user (a real personnel.unlink event) and link that user to
   // the freshly created test record (a real personnel.link event), then

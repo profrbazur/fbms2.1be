@@ -43,13 +43,13 @@ afterAll(async () => {
 });
 
 describe('userSeeder', () => {
-  it('creates exactly 2 departments and 9 users', async () => {
+  it('creates exactly 2 departments and 11 users (9 original + 2 V2.2 Senior Leadership)', async () => {
     const result = await seedUsers();
 
     expect(result.departmentCount).toBe(2);
-    expect(result.userCount).toBe(9);
+    expect(result.userCount).toBe(11);
     expect(await Department.countDocuments()).toBe(2);
-    expect(await User.countDocuments()).toBe(9);
+    expect(await User.countDocuments()).toBe(11);
   });
 
   it('is idempotent — running it again does not create duplicates', async () => {
@@ -57,7 +57,7 @@ describe('userSeeder', () => {
     await seedUsers();
 
     expect(await Department.countDocuments()).toBe(2);
-    expect(await User.countDocuments()).toBe(9);
+    expect(await User.countDocuments()).toBe(11);
   });
 
   it('has no duplicate email addresses', async () => {
@@ -97,6 +97,7 @@ describe('userSeeder', () => {
     expect(counts.super_admin).toBe(1);
     expect(counts.department_head).toBe(2);
     expect(counts.personnel).toBe(6);
+    expect(counts.senior_leadership).toBe(2);
   });
 });
 
@@ -182,8 +183,8 @@ describe('personnelSeeder', () => {
     expect(new Set(linkedUserIds).size).toBe(linkedUserIds.length);
   });
 
-  it('exactly nine authentication users remain after seeding personnel', async () => {
-    expect(await User.countDocuments()).toBe(9);
+  it('exactly eleven authentication users remain after seeding personnel', async () => {
+    expect(await User.countDocuments()).toBe(11);
   });
 });
 

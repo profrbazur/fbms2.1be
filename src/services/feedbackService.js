@@ -5,6 +5,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { isValidObjectId } from '../utils/isValidObjectId.js';
 import { escapeRegExp } from '../utils/escapeRegExp.js';
 import { parsePositiveInt } from '../utils/parsePositiveInt.js';
+import { isGlobalReadRole } from '../utils/roleScope.js';
 import { resolveActiveSurveyForTablet } from './mobileService.js';
 
 function emptyPagination(limit) {
@@ -86,7 +87,7 @@ export async function listFeedbackSessions(
 ) {
   const filter = {};
 
-  if (user.role === 'super_admin') {
+  if (isGlobalReadRole(user.role)) {
     if (departmentId) {
       if (!isValidObjectId(departmentId)) {
         throw new ApiError(400, 'departmentId must be a valid id.', [
@@ -151,7 +152,7 @@ export async function listFeedbackSessions(
 }
 
 function assertSessionVisible(user, session) {
-  if (user.role === 'super_admin') return;
+  if (isGlobalReadRole(user.role)) return;
 
   const ownDepartmentId = user.departmentId ? user.departmentId.toString() : null;
   if (ownDepartmentId !== session.departmentId.toString()) {
