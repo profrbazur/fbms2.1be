@@ -8,6 +8,7 @@ import { seedUsers } from './userSeeder.js';
 import { seedOrganizationSettings, seedBuildings, seedLocations } from './organizationSeeder.js';
 import { seedPersonnel } from './personnelSeeder.js';
 import { seedTablets } from './tabletSeeder.js';
+import { seedServiceSessions } from './serviceSessionSeeder.js';
 import { seedSurveys } from './surveySeeder.js';
 import { seedFeedback, SEEDED_REFERENCE_CODES } from './feedbackSeeder.js';
 
@@ -82,6 +83,7 @@ export async function seedDevelopmentDataset() {
   const locationResult = await seedLocations();
   const personnelResult = await seedPersonnel();
   const tabletResult = await seedTablets();
+  const serviceSessionResult = await seedServiceSessions();
   const surveyResult = await seedSurveys();
   const feedbackResult = await seedFeedback();
 
@@ -94,6 +96,7 @@ export async function seedDevelopmentDataset() {
     locationCount: locationResult.locationCount,
     personnelCount: personnelResult.personnelCount,
     tabletCount: tabletResult.tabletCount,
+    serviceSessionCount: serviceSessionResult.sessionCount,
     surveyCount: surveyResult.surveyCount,
     questionCount: surveyResult.questionCount,
     sessionCount: feedbackResult.sessionCount,
@@ -118,6 +121,7 @@ async function run() {
   console.log(`Departments: ${result.departmentCount}, Users: ${result.userCount}`);
   console.log(`Buildings: ${result.buildingCount}`);
   console.log(`Locations: ${result.locationCount}, Personnel: ${result.personnelCount}, Tablets: ${result.tabletCount}`);
+  console.log(`Service sessions: ${result.serviceSessionCount}`);
   console.log(`Surveys: ${result.surveyCount} (${result.questionCount} questions)`);
   console.log(`Feedback sessions: ${result.sessionCount} (${result.answerCount} answers)`);
 

@@ -3,6 +3,18 @@ import User from '../models/User.js';
 import Personnel from '../models/Personnel.js';
 
 /**
+ * Dev-only default Staff PIN, one distinct value per seeded Personnel
+ * record (see backend/dev-data/README.md) — V2.4's PIN login is scoped
+ * to (departmentId, PIN), so seeding the same PIN for every Personnel in
+ * a department would make the seeded "multiple Personnel using service
+ * points" scenario ambiguous to test against. Override with
+ * SEED_STAFF_PIN_PREFIX if a different base is needed; never used for
+ * anything beyond local/dev testing (mirrors userSeeder.js's
+ * DEFAULT_PASSWORD convention).
+ */
+const STAFF_PIN_PREFIX = process.env.SEED_STAFF_PIN_PREFIX || '11100';
+
+/**
  * Clearly non-production sample Personnel records, linked to the
  * existing seeded authentication users by email — never creates,
  * modifies, or unlinks a User. One record per Registrar/Library
@@ -95,10 +107,28 @@ const PERSONNEL_RECORDS = [
 ];
 
 /**
+ * V2.4 — the full set of dev Staff PINs, one per PERSONNEL_RECORDS entry
+ * in order (see backend/dev-data/README.md for the printed table). Kept
+ * as a plain lookup by employeeNumber rather than inline on each record
+ * so PERSONNEL_RECORDS itself stays untouched (V2.3's own array), which
+ * also means a plaintext PIN is never accidentally logged from
+ * PERSONNEL_RECORDS being printed/inspected elsewhere.
+ */
+const STAFF_PINS_BY_EMPLOYEE_NUMBER = Object.fromEntries(
+  PERSONNEL_RECORDS.map((record, index) => [
+    record.employeeNumber,
+    `${STAFF_PIN_PREFIX}${index + 1}`,
+  ]),
+);
+
+/**
  * Idempotent: upserts each record by its unique employeeNumber, keyed
  * to whichever department/user currently exist. Never writes to the
  * User collection — the User must already exist (created by
- * userSeeder.js) for its record to be linked.
+ * userSeeder.js) for its record to be linked. Also (re)provisions each
+ * record's Staff PIN (V2.4) to its deterministic dev value on every run,
+ * the same "reset to a known state" idempotency already applied to
+ * isActive/departmentId above.
  */
 export async function seedPersonnel() {
   const departmentCodes = [...new Set(PERSONNEL_RECORDS.map((record) => record.departmentCode))];
@@ -121,6 +151,8 @@ export async function seedPersonnel() {
     }
 
     const linkedUser = userByEmail[record.linkedEmail];
+    const pin = STAFF_PINS_BY_EMPLOYEE_NUMBER[record.employeeNumber];
+    const pinHash = await Personnel.hashPin(pin);
 
     // Unset (not null) when unlinked — see the model's userId comment on
     // why an explicit `null` would break the sparse unique index once more
@@ -134,6 +166,8 @@ export async function seedPersonnel() {
         position: record.position,
         departmentId,
         isActive: true,
+        pinHash,
+        pinSetAt: new Date(),
       },
     };
     if (linkedUser) {

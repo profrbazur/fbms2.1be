@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { env } from './config/env.js';
 import routes from './routes/index.js';
+import mobileV2Routes from './routes/mobileV2/index.js';
 import swaggerRouter from './docs/swaggerRouter.js';
 import { notFoundHandler } from './middleware/notFoundHandler.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -34,6 +35,11 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 app.use(swaggerRouter);
 
 app.use('/api/v1', routes);
+// V2.4 — the enhanced, breaking kiosk workflow (Staff PIN / ServiceSession
+// / attributed feedback) lives under /api/v2/mobile, coexisting with the
+// unchanged /api/v1/mobile contract current student clients depend on.
+// See backend/docs/v2/V2_API_VERSIONING.md.
+app.use('/api/v2/mobile', mobileV2Routes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

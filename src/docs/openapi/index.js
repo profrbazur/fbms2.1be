@@ -29,6 +29,7 @@ import { buildingsPaths } from './paths/buildings.js';
 import { locationsPaths } from './paths/locations.js';
 import { personnelPaths } from './paths/personnel.js';
 import { tabletsPaths } from './paths/tablets.js';
+import { serviceSessionsPaths } from './paths/serviceSessions.js';
 import { surveysPaths } from './paths/surveys.js';
 import { feedbackPaths } from './paths/feedback.js';
 import { dashboardPaths } from './paths/dashboard.js';
@@ -48,6 +49,7 @@ const tags = [
   { name: 'Locations', description: 'Locations/service windows master data — each belongs to a Department and, as of V2.3, a Building.' },
   { name: 'Personnel', description: 'Organizational personnel records (separate from User login accounts).' },
   { name: 'Tablets', description: 'Kiosk tablet registration and activation-token lifecycle.' },
+  { name: 'Service Sessions', description: 'V2.4 — read-only view of Staff PIN service sessions (personnel currently/previously serving at a tablet). Mutated only via /api/v2/mobile/staff/*.' },
   { name: 'Surveys', description: 'Surveys, questions, and the publish/unpublish/archive lifecycle.' },
   { name: 'Feedback', description: 'Read-only, immutable, anonymous feedback sessions and answers.' },
   { name: 'Dashboard', description: 'Role-scoped operational summary.' },
@@ -68,6 +70,7 @@ const paths = {
   ...locationsPaths,
   ...personnelPaths,
   ...tabletsPaths,
+  ...serviceSessionsPaths,
   ...surveysPaths,
   ...feedbackPaths,
   ...dashboardPaths,

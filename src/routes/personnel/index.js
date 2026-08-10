@@ -11,6 +11,7 @@ import {
   postPersonnel,
   patchPersonnel,
   getLinkableUsers,
+  postRegeneratePin,
 } from '../../controllers/personnelController.js';
 
 // Mounted at /api/v1/personnel per docs/API_CONTRACT.md (P3.1).
@@ -35,6 +36,17 @@ router.patch(
   authorizeRoles('super_admin'),
   validatePersonnelUpdate,
   patchPersonnel,
+);
+// V2.4 — Staff PIN management is a Super Admin-only administrative
+// action, deliberately separate from the general PATCH above (see
+// backend/docs/v2/V2_4_STAFF_PIN_SERVICE_SESSION.md's "PIN hashes must
+// never be exposed to the frontend" — this is the only endpoint that
+// ever returns a plaintext PIN, and only once).
+router.post(
+  '/:id/regenerate-pin',
+  authenticate,
+  authorizeRoles('super_admin'),
+  postRegeneratePin,
 );
 
 export default router;

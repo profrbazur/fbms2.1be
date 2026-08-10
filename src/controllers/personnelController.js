@@ -6,6 +6,7 @@ import {
   createPersonnel,
   updatePersonnel,
   listLinkableUsers,
+  regeneratePersonnelPin,
 } from '../services/personnelService.js';
 import { recordAuditEvent, resolveLifecycleAction } from '../services/auditService.js';
 import { parseBooleanQueryParam } from '../utils/parseBooleanQueryParam.js';
@@ -95,6 +96,30 @@ export const patchPersonnel = asyncHandler(async function patchPersonnel(req, re
   return sendSuccess(res, {
     message: 'Personnel record updated successfully.',
     data: { personnel },
+  });
+});
+
+// V2.4 — POST /api/v1/personnel/:id/regenerate-pin. Mirrors
+// tabletController.postRegenerateToken's shape exactly: the plaintext PIN
+// is returned in this one response only, and the audit trail records
+// only that regeneration occurred, never the PIN value itself.
+export const postRegeneratePin = asyncHandler(async function postRegeneratePin(req, res) {
+  const { pin, personnel } = await regeneratePersonnelPin(req.params.id);
+
+  await recordAuditEvent({
+    actor: req.user,
+    action: 'personnel.regenerate_pin',
+    entityType: 'personnel',
+    entityId: personnel._id,
+    entityLabel: personnel.fullName || personnel.employeeNumber,
+    departmentId: personnel.departmentId,
+    metadata: { note: 'Staff PIN regenerated.' },
+    req,
+  });
+
+  return sendSuccess(res, {
+    message: 'Staff PIN regenerated successfully. Store this PIN securely — it will not be shown again.',
+    data: { pin, personnel },
   });
 });
 

@@ -20,6 +20,19 @@ export const FEEDBACK_SESSION_STATUSES = ['completed'];
  * human-readable identifier — introduced in this phase since sessions
  * are anonymous and have no reporter name to search or display by; see
  * docs/DECISIONS.md.
+ *
+ * V2.4 — `serviceSessionId`/`personnelId`/`buildingId` are an optional,
+ * additive historical-attribution snapshot (backend/docs/v2/
+ * V2_4_STAFF_PIN_SERVICE_SESSION.md): only ever set by the
+ * device-authenticated /api/v2/mobile/feedback path, when the submitting
+ * tablet had an active ServiceSession. `default: null` (not an absent
+ * key) so every session — old and new — always exposes the same field
+ * shape in API responses; a pre-V2.4 or v1-submitted session simply reads
+ * `personnelId: null`, which the frontend treats as "no staff attribution
+ * available," never as an error. These are snapshotted at submission
+ * time and never re-derived from the tablet's current state afterward —
+ * a later Personnel/Tablet reassignment must never change what an
+ * already-submitted FeedbackSession attributes.
  */
 const feedbackSessionSchema = new mongoose.Schema(
   {
@@ -68,6 +81,21 @@ const feedbackSessionSchema = new mongoose.Schema(
       enum: FEEDBACK_SESSION_STATUSES,
       default: 'completed',
     },
+    serviceSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ServiceSession',
+      default: null,
+    },
+    personnelId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Personnel',
+      default: null,
+    },
+    buildingId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Building',
+      default: null,
+    },
   },
   { timestamps: true },
 );
@@ -76,6 +104,8 @@ feedbackSessionSchema.index({ departmentId: 1, submittedAt: -1 });
 feedbackSessionSchema.index({ surveyId: 1 });
 feedbackSessionSchema.index({ locationId: 1 });
 feedbackSessionSchema.index({ tabletId: 1 });
+feedbackSessionSchema.index({ personnelId: 1, submittedAt: -1 });
+feedbackSessionSchema.index({ serviceSessionId: 1 });
 
 const FeedbackSession = mongoose.model('FeedbackSession', feedbackSessionSchema);
 

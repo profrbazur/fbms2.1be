@@ -237,6 +237,12 @@ export const schemas = {
       departmentId: objectId,
       userId: { ...objectId, nullable: true, description: 'Optional one-to-one link to a User login account.' },
       isActive: { type: 'boolean', example: true },
+      pinSetAt: {
+        type: 'string',
+        format: 'date-time',
+        nullable: true,
+        description: 'V2.4 — set whenever a Staff PIN is (re)provisioned. Never exposes the PIN or its hash; use this only to tell whether a PIN has been configured.',
+      },
       ...timestamps,
     },
   },
@@ -341,6 +347,60 @@ export const schemas = {
       completedAt: { type: 'string', format: 'date-time' },
       durationSeconds: { type: 'integer', example: 42 },
       status: { type: 'string', enum: ['completed'], example: 'completed' },
+      serviceSessionId: { ...objectId, nullable: true, description: 'V2.4 — set only for feedback submitted via /api/v2/mobile/feedback while a staff ServiceSession was active. null for every pre-V2.4 or v1-submitted session.' },
+      personnelId: {
+        nullable: true,
+        description: 'V2.4 — historical attribution snapshot, populated to a small Personnel projection on read. null when no staff was serving (or the session predates V2.4).',
+        oneOf: [
+          { ...objectId },
+          {
+            type: 'object',
+            properties: {
+              _id: objectId,
+              firstName: { type: 'string', example: 'Maria' },
+              middleName: { type: 'string', example: '' },
+              lastName: { type: 'string', example: 'Cruz' },
+              suffix: { type: 'string', example: '' },
+              employeeNumber: { type: 'string', example: 'EMP-0007' },
+            },
+          },
+        ],
+      },
+      buildingId: { ...objectId, nullable: true, description: 'V2.4 — snapshotted from the ServiceSession at submission time, not the tablet’s current Location.' },
+      ...timestamps,
+    },
+  },
+
+  ServiceSession: {
+    type: 'object',
+    description: 'V2.4 — one staff member serving at a Tablet/Location during a time interval, opened by Staff PIN login and closed by logout. Read-only through the admin API; mutated only via /api/v2/mobile/staff/*.',
+    properties: {
+      _id: objectId,
+      personnelId: {
+        description: 'Populated to a small Personnel projection on read.',
+        oneOf: [
+          { ...objectId },
+          {
+            type: 'object',
+            properties: {
+              _id: objectId,
+              firstName: { type: 'string', example: 'Maria' },
+              middleName: { type: 'string', example: '' },
+              lastName: { type: 'string', example: 'Cruz' },
+              suffix: { type: 'string', example: '' },
+              employeeNumber: { type: 'string', example: 'EMP-0007' },
+              position: { type: 'string', example: 'Registrar Personnel' },
+            },
+          },
+        ],
+      },
+      departmentId: objectId,
+      buildingId: objectId,
+      locationId: objectId,
+      tabletId: objectId,
+      startedAt: { type: 'string', format: 'date-time' },
+      endedAt: { type: 'string', format: 'date-time', nullable: true },
+      status: { type: 'string', enum: ['active', 'ended'], example: 'active' },
       ...timestamps,
     },
   },
