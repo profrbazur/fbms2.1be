@@ -5,6 +5,7 @@ import { isValidObjectId } from '../utils/isValidObjectId.js';
 import { escapeRegExp } from '../utils/escapeRegExp.js';
 import { parsePositiveInt } from '../utils/parsePositiveInt.js';
 import { isGlobalReadRole } from '../utils/roleScope.js';
+import { generateStaffPin } from '../utils/generateStaffPin.js';
 import { assertDepartmentIsUsable } from './locationService.js';
 
 const SORT_FIELDS = ['employeeNumber', 'firstName', 'lastName', 'position', 'createdAt'];
@@ -273,6 +274,93 @@ export async function updatePersonnel(id, updates) {
   await personnel.save();
 
   return personnel;
+}
+
+const PIN_GENERATION_MAX_ATTEMPTS = 5;
+
+/**
+ * V2.4 — (re)provisions a Personnel's Staff PIN with a fresh,
+ * server-generated 6-digit value (backend/docs/v2/
+ * V2_4_STAFF_PIN_SERVICE_SESSION.md — the client never supplies a PIN
+ * value, only requests regeneration). Mirrors
+ * tabletService.regenerateActivationToken's "generate, verify no
+ * in-department collision, save" shape, and Tablet.postActivate's
+ * "return the plaintext value exactly once, never again" contract for
+ * deviceSecret. The plaintext PIN is returned to the caller only for
+ * this one response — it is never stored, logged, or retrievable again
+ * afterward (only pinHash persists).
+ *
+ * Collisions are checked only within the same department (the same
+ * scope verifyStaffPin searches), not globally — two Personnel in
+ * different departments coincidentally sharing a PIN is harmless, since
+ * a tablet's staff login is always scoped to its own department.
+ */
+export async function regeneratePersonnelPin(id) {
+  if (!isValidObjectId(id)) {
+    throw new ApiError(404, 'Personnel record not found.');
+  }
+
+  const personnel = await Personnel.findById(id);
+
+  if (!personnel) {
+    throw new ApiError(404, 'Personnel record not found.');
+  }
+
+  const departmentPeers = await Personnel.find({
+    departmentId: personnel.departmentId,
+    _id: { $ne: personnel._id },
+    pinHash: { $exists: true },
+  }).select('+pinHash');
+
+  let pin;
+  let attempt = 0;
+  let collision = true;
+
+  while (collision && attempt < PIN_GENERATION_MAX_ATTEMPTS) {
+    pin = generateStaffPin();
+    const matches = await Promise.all(departmentPeers.map((peer) => peer.comparePin(pin)));
+    collision = matches.some(Boolean);
+    attempt += 1;
+  }
+
+  if (collision) {
+    throw new ApiError(500, 'Unable to generate a unique Staff PIN. Please try again.');
+  }
+
+  personnel.pinHash = await Personnel.hashPin(pin);
+  personnel.pinSetAt = new Date();
+  await personnel.save();
+
+  return { pin, personnel };
+}
+
+/**
+ * V2.4 — locates the Personnel record (active, within the serving
+ * tablet's own department) whose Staff PIN matches the supplied
+ * plaintext value. Scoped to `departmentId` — not global — both because
+ * a tablet's service window only ever belongs to one department, and
+ * because narrowing the bcrypt.compare candidate set to one department
+ * keeps this endpoint's cost bounded regardless of total Personnel
+ * count. Returns `null` (never throws) on no match — callers are
+ * responsible for the generic "Invalid PIN" response, so a wrong PIN and
+ * a PIN belonging to another department are indistinguishable to the
+ * caller, per this phase's "avoid leaking whether a particular PIN
+ * belongs to another department" security principle.
+ */
+export async function verifyStaffPin(departmentId, pin) {
+  const candidates = await Personnel.find({
+    departmentId,
+    isActive: true,
+    pinHash: { $exists: true },
+  }).select('+pinHash');
+
+  for (const candidate of candidates) {
+    if (await candidate.comparePin(pin)) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 /**

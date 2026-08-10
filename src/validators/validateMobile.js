@@ -98,6 +98,29 @@ export function validateFeedbackSubmission(req, res, next) {
   return next();
 }
 
+// POST /api/v2/mobile/staff/login (V2.4) — the PIN is always exactly 6
+// digits at input, per backend/docs/v2/V2_4_STAFF_PIN_SERVICE_SESSION.md.
+// No other field is accepted: personnelId/departmentId etc. are always
+// resolved server-side from the PIN match, never supplied by the client.
+const PIN_PATTERN = /^\d{6}$/;
+
+export function validateStaffLogin(req, res, next) {
+  const body = req.body ?? {};
+  const errors = [];
+
+  rejectUnknownFields(body, ['pin'], errors);
+
+  if (typeof body.pin !== 'string' || !PIN_PATTERN.test(body.pin)) {
+    errors.push({ field: 'pin', message: 'pin must be exactly 6 digits.' });
+  }
+
+  if (errors.length > 0) {
+    return next(new ApiError(400, 'Validation failed.', errors));
+  }
+
+  return next();
+}
+
 // POST /api/v1/mobile/sync — Version 1 implements only this stub
 // contract (see docs/MOBILE_PROTOCOL.md); `pendingFeedback`, if
 // supplied, must be an array, but its contents are not processed yet

@@ -1,6 +1,8 @@
 import Survey from '../models/Survey.js';
 import Question from '../models/Question.js';
 import Tablet from '../models/Tablet.js';
+import Personnel from '../models/Personnel.js';
+import ServiceSession from '../models/ServiceSession.js';
 import FeedbackSession from '../models/FeedbackSession.js';
 import FeedbackAnswer from '../models/FeedbackAnswer.js';
 import { validateAnswerForQuestion } from '../services/feedbackService.js';
@@ -28,6 +30,12 @@ const FEEDBACK_SESSIONS = [
     tabletDeviceCode: 'REG-TAB-01',
     submittedAt: '2026-07-20T09:15:00.000Z',
     completedAt: '2026-07-20T09:16:40.000Z',
+    // V2.4 — attributed to the matching seeded ServiceSession (see
+    // serviceSessionSeeder.js). Only the first five sessions carry
+    // attribution; FB-2026-000006 through 000010 stay unattributed on
+    // purpose, to also exercise "existing feedback without ServiceSession
+    // remains readable."
+    attributedEmployeeNumber: 'REG-0002',
     answers: [
       { questionText: 'How would you rate your overall experience today?', answer: 5 },
       { questionText: 'Would you recommend our services to others?', answer: true },
@@ -43,6 +51,7 @@ const FEEDBACK_SESSIONS = [
     tabletDeviceCode: 'REG-TAB-01',
     submittedAt: '2026-07-22T13:05:00.000Z',
     completedAt: '2026-07-22T13:06:30.000Z',
+    attributedEmployeeNumber: 'REG-0003',
     answers: [
       { questionText: 'How would you rate your overall experience today?', answer: 4 },
       { questionText: 'Would you recommend our services to others?', answer: true },
@@ -58,6 +67,7 @@ const FEEDBACK_SESSIONS = [
     tabletDeviceCode: 'REG-TAB-02',
     submittedAt: '2026-07-24T10:40:00.000Z',
     completedAt: '2026-07-24T10:41:50.000Z',
+    attributedEmployeeNumber: 'REG-0004',
     answers: [
       { questionText: 'How would you rate your overall experience today?', answer: 2 },
       { questionText: 'Would you recommend our services to others?', answer: false },
@@ -73,6 +83,7 @@ const FEEDBACK_SESSIONS = [
     tabletDeviceCode: 'LIB-TAB-01',
     submittedAt: '2026-07-25T14:20:00.000Z',
     completedAt: '2026-07-25T14:21:15.000Z',
+    attributedEmployeeNumber: 'LIB-0002',
     answers: [
       { questionText: 'How would you rate your overall experience today?', answer: 5 },
       { questionText: 'Would you recommend our services to others?', answer: true },
@@ -85,6 +96,7 @@ const FEEDBACK_SESSIONS = [
     tabletDeviceCode: 'LIB-TAB-02',
     submittedAt: '2026-07-27T11:00:00.000Z',
     completedAt: '2026-07-27T11:01:20.000Z',
+    attributedEmployeeNumber: 'LIB-0003',
     answers: [
       { questionText: 'How would you rate your overall experience today?', answer: 3 },
       { questionText: 'Would you recommend our services to others?', answer: true },
@@ -202,6 +214,30 @@ export async function seedFeedback() {
     const completedAt = new Date(definition.completedAt);
     const durationSeconds = Math.round((completedAt.getTime() - submittedAt.getTime()) / 1000);
 
+    // V2.4 — resolves the optional historical-attribution snapshot (see
+    // this file's own FEEDBACK_SESSIONS comment and
+    // serviceSessionSeeder.js). Silently stays null (not an error) when
+    // the definition has no attributedEmployeeNumber, or the referenced
+    // Personnel/ServiceSession doesn't exist yet — the same
+    // "skip if a dependency is missing" convention used throughout.
+    let attribution = { serviceSessionId: null, personnelId: null, buildingId: null };
+    if (definition.attributedEmployeeNumber) {
+      const personnel = await Personnel.findOne({ employeeNumber: definition.attributedEmployeeNumber });
+      if (personnel) {
+        const serviceSession = await ServiceSession.findOne({
+          personnelId: personnel._id,
+          tabletId: tablet._id,
+        });
+        if (serviceSession) {
+          attribution = {
+            serviceSessionId: serviceSession._id,
+            personnelId: personnel._id,
+            buildingId: serviceSession.buildingId,
+          };
+        }
+      }
+    }
+
     const session = await FeedbackSession.findOneAndUpdate(
       { referenceCode: definition.referenceCode },
       {
@@ -214,6 +250,7 @@ export async function seedFeedback() {
           completedAt,
           durationSeconds,
           status: 'completed',
+          ...attribution,
         },
       },
       { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },

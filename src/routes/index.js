@@ -15,6 +15,7 @@ import reportsRoutes from './reports/index.js';
 import settingsRoutes from './settings/index.js';
 import auditRoutes from './audit/index.js';
 import mobileRoutes from './mobile/index.js';
+import serviceSessionsRoutes from './serviceSessions/index.js';
 import liveMonitoringRoutes from './live-monitoring/index.js';
 import developerPortalRoutes from './developer-portal/index.js';
 
@@ -36,6 +37,7 @@ router.use('/reports', reportsRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/audit-logs', auditRoutes);
 router.use('/mobile', mobileRoutes);
+router.use('/service-sessions', serviceSessionsRoutes);
 router.use('/live-monitoring', liveMonitoringRoutes);
 router.use('/developer-portal', developerPortalRoutes);
 

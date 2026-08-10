@@ -8,6 +8,7 @@ import { buildingsPaths } from '../../src/docs/openapi/paths/buildings.js';
 import { locationsPaths } from '../../src/docs/openapi/paths/locations.js';
 import { personnelPaths } from '../../src/docs/openapi/paths/personnel.js';
 import { tabletsPaths } from '../../src/docs/openapi/paths/tablets.js';
+import { serviceSessionsPaths } from '../../src/docs/openapi/paths/serviceSessions.js';
 import { surveysPaths } from '../../src/docs/openapi/paths/surveys.js';
 import { feedbackPaths } from '../../src/docs/openapi/paths/feedback.js';
 import { dashboardPaths } from '../../src/docs/openapi/paths/dashboard.js';
@@ -28,6 +29,7 @@ const pathModules = [
   locationsPaths,
   personnelPaths,
   tabletsPaths,
+  serviceSessionsPaths,
   surveysPaths,
   feedbackPaths,
   dashboardPaths,
@@ -79,6 +81,7 @@ describe('OpenAPI document structure', () => {
       'Personnel',
       'Tablet',
       'MonitoredTablet',
+      'ServiceSession',
       'Survey',
       'Question',
       'FeedbackSession',
@@ -96,13 +99,14 @@ describe('OpenAPI document structure', () => {
     });
   });
 
-  it('never exposes passwordHash or deviceSecretHash as an actual schema property', () => {
+  it('never exposes passwordHash, deviceSecretHash, or pinHash as an actual schema property', () => {
     // Matches only a JSON property key (e.g. "passwordHash":), not the word
     // appearing in prose (e.g. a schema description noting the field is
     // excluded) — the latter is expected and desirable documentation.
     const json = JSON.stringify(openApiDocument.components.schemas);
     expect(json).not.toMatch(/"passwordHash":/);
     expect(json).not.toMatch(/"deviceSecretHash":/);
+    expect(json).not.toMatch(/"pinHash":/);
   });
 
   it('merges every path module with no silently-overwritten duplicate keys', () => {

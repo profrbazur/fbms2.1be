@@ -145,4 +145,36 @@ export const personnelPaths = {
       },
     },
   },
+  '/personnel/{id}/regenerate-pin': {
+    post: {
+      tags: ['Personnel'],
+      summary: 'Regenerate a personnel member’s Staff PIN',
+      description: 'V2.4, Super Admin only. Issues a fresh, server-generated 6-digit Staff PIN and returns it in plaintext exactly once — it is never retrievable again afterward, and pinHash is never exposed by any endpoint. The old PIN, if any, is immediately invalidated.',
+      operationId: 'regeneratePersonnelPin',
+      security: [{ bearerAuth: [] }],
+      parameters: [parameters.idParam],
+      responses: {
+        200: {
+          description: 'Staff PIN regenerated successfully.',
+          content: {
+            'application/json': {
+              schema: successEnvelope(
+                {
+                  type: 'object',
+                  properties: {
+                    pin: { type: 'string', example: '048213', description: 'Plaintext PIN — shown only in this one response.' },
+                    personnel: { $ref: '#/components/schemas/Personnel' },
+                  },
+                },
+                'Staff PIN regenerated successfully.',
+              ),
+            },
+          },
+        },
+        401: commonResponses.Unauthorized,
+        403: commonResponses.Forbidden,
+        404: commonResponses.NotFound,
+      },
+    },
+  },
 };

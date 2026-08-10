@@ -136,7 +136,14 @@ export async function listFeedbackSessions(
   const skip = (pageNum - 1) * limitNum;
 
   const [feedbackSessions, total] = await Promise.all([
-    FeedbackSession.find(filter).sort({ submittedAt: -1 }).skip(skip).limit(limitNum),
+    FeedbackSession.find(filter)
+      // V2.4 — lightweight attribution summary for the list view; `null`
+      // for any session without a personnelId (every pre-V2.4 session,
+      // and any v1-submitted session), which populate() leaves as null.
+      .populate('personnelId', 'firstName middleName lastName suffix employeeNumber')
+      .sort({ submittedAt: -1 })
+      .skip(skip)
+      .limit(limitNum),
     FeedbackSession.countDocuments(filter),
   ]);
 
@@ -173,7 +180,10 @@ export async function getFeedbackSessionById(user, id) {
     throw new ApiError(404, 'Feedback session not found.');
   }
 
-  const session = await FeedbackSession.findById(id);
+  const session = await FeedbackSession.findById(id).populate(
+    'personnelId',
+    'firstName middleName lastName suffix employeeNumber position',
+  );
 
   if (!session) {
     throw new ApiError(404, 'Feedback session not found.');
@@ -223,7 +233,8 @@ async function generateUniqueReferenceCode() {
 }
 
 /**
- * POST /api/v1/mobile/feedback (P5.1) — the only writer of
+ * Shared by both POST /api/v1/mobile/feedback (P5.1) and POST
+ * /api/v2/mobile/feedback (V2.4) — the only writer of
  * FeedbackSession/FeedbackAnswer outside the seeder. departmentId/
  * locationId are always derived from the authenticated `tablet`, never
  * from `payload` (validateMobile.js's validateFeedbackSubmission
@@ -233,8 +244,18 @@ async function generateUniqueReferenceCode() {
  * this tablet — rejects a submission against a stale/cached survey the
  * tablet no longer has active (swapped, unpublished, or archived since
  * the tablet last fetched it via GET /mobile/survey).
+ *
+ * `attribution` (V2.4, optional) — `{ serviceSessionId, personnelId,
+ * buildingId }`, resolved server-side by mobileServiceV2 from the
+ * tablet's currently active ServiceSession, never accepted from the
+ * request body (validateFeedbackSubmission's ALLOWED_FIELDS has no
+ * attribution fields at all, on either API version — see
+ * backend/docs/v2's "attribution cannot be spoofed by client payload"
+ * requirement). `undefined` for the v1 caller, which never sets it —
+ * v1-submitted sessions get `personnelId: null` from the schema default,
+ * exactly like every pre-V2.4 session.
  */
-export async function submitFeedback(tablet, payload) {
+async function createFeedbackSession(tablet, payload, attribution) {
   const { surveyId, submittedAt, completedAt, answers } = payload;
 
   const activeSurvey = await resolveActiveSurveyForTablet(tablet);
@@ -308,6 +329,9 @@ export async function submitFeedback(tablet, payload) {
     completedAt: completedDate,
     durationSeconds,
     status: 'completed',
+    serviceSessionId: attribution?.serviceSessionId ?? null,
+    personnelId: attribution?.personnelId ?? null,
+    buildingId: attribution?.buildingId ?? null,
   });
 
   const createdAnswers = await FeedbackAnswer.insertMany(
@@ -315,4 +339,36 @@ export async function submitFeedback(tablet, payload) {
   );
 
   return { session, answers: createdAnswers };
+}
+
+// POST /api/v1/mobile/feedback — never attributed (v1 has no ServiceSession
+// concept). See createFeedbackSession's own doc comment.
+export async function submitFeedback(tablet, payload) {
+  return createFeedbackSession(tablet, payload, null);
+}
+
+/**
+ * POST /api/v2/mobile/feedback (V2.4). Requires the submitting tablet to
+ * have a currently active ServiceSession — the entire point of the v2
+ * kiosk workflow is that a staff member has already identified
+ * themselves before a customer can leave feedback (see
+ * backend/docs/v2/V2_4_STAFF_PIN_SERVICE_SESSION.md's Tablet Flow).
+ * `buildingId` is read from the active session's own snapshot, not
+ * re-derived from the tablet's current Location, for the same
+ * never-trust-current-mutable-state reasoning as everything else in this
+ * phase.
+ */
+export async function submitFeedbackV2(tablet, payload, activeServiceSession) {
+  if (!activeServiceSession) {
+    throw new ApiError(
+      409,
+      'No active staff service session. A staff member must log in with their PIN before feedback can be submitted.',
+    );
+  }
+
+  return createFeedbackSession(tablet, payload, {
+    serviceSessionId: activeServiceSession._id,
+    personnelId: activeServiceSession.personnelId?._id ?? activeServiceSession.personnelId,
+    buildingId: activeServiceSession.buildingId,
+  });
 }

@@ -30,6 +30,7 @@ export const AUDIT_ACTIONS = [
   'personnel.unlink',
   'personnel.activate',
   'personnel.deactivate',
+  'personnel.regenerate_pin',
   'tablet.create',
   'tablet.update',
   'tablet.activate',
