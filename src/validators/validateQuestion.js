@@ -1,14 +1,15 @@
 import { ApiError } from '../utils/ApiError.js';
-import { QUESTION_TYPES } from '../models/Question.js';
+import { QUESTION_TYPES, SERVICE_QUALITY_CATEGORIES } from '../models/Question.js';
 
 // surveyId is deliberately absent — it comes from the :id route param
 // (POST /surveys/:id/questions), never the request body. Cross-field
 // validation that depends on questionType (whether options are
-// required/forbidden) lives in questionService.js's
-// assertValidQuestionFields, since a stateless validator can't express
-// "options required only when questionType is multiple_choice" as
-// cleanly as a service function can.
-const ALLOWED_FIELDS = ['questionText', 'questionType', 'required', 'order', 'options'];
+// required/forbidden, or serviceQualityCategory is allowed — V2.5) lives
+// in questionService.js's assertValidQuestionFields/
+// assertValidServiceQualityCategory, since a stateless validator can't
+// express "only allowed when questionType is X" as cleanly as a service
+// function can.
+const ALLOWED_FIELDS = ['questionText', 'questionType', 'required', 'order', 'options', 'serviceQualityCategory'];
 
 function validateUnknownFields(body, errors) {
   Object.keys(body)
@@ -42,6 +43,21 @@ function validateSharedFields(body, errors) {
 
   if ('options' in body && !Array.isArray(body.options)) {
     errors.push({ field: 'options', message: 'options must be an array of strings.' });
+  }
+
+  // V2.5 — whitelist check only (never an arbitrary string, which would
+  // fragment analytics). Whether it's allowed for this question's actual
+  // questionType is a cross-field check questionService.js's
+  // assertValidServiceQualityCategory performs.
+  if (
+    'serviceQualityCategory' in body &&
+    body.serviceQualityCategory !== null &&
+    !SERVICE_QUALITY_CATEGORIES.includes(body.serviceQualityCategory)
+  ) {
+    errors.push({
+      field: 'serviceQualityCategory',
+      message: `serviceQualityCategory must be one of: ${SERVICE_QUALITY_CATEGORIES.join(', ')}, or null.`,
+    });
   }
 }
 

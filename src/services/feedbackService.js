@@ -310,7 +310,17 @@ async function createFeedbackSession(tablet, payload, attribution) {
   const normalizedAnswers = answers.map((answerPayload) => {
     const question = questionById.get(answerPayload.questionId);
     const normalizedAnswer = validateAnswerForQuestion(question, answerPayload.answer);
-    return { questionId: question._id, questionType: question.questionType, answer: normalizedAnswer };
+    return {
+      questionId: question._id,
+      questionType: question.questionType,
+      answer: normalizedAnswer,
+      // V2.5 — snapshotted from the Question's *current* mapping at
+      // submission time, exactly like questionType above; never
+      // accepted from `answerPayload` (validateMobile.js's
+      // validateFeedbackSubmission has no such field in either
+      // ALLOWED_FIELDS list) — a client cannot spoof a category.
+      serviceQualityCategory: question.serviceQualityCategory ?? null,
+    };
   });
 
   const referenceCode = await generateUniqueReferenceCode();

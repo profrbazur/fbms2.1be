@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { QUESTION_TYPES } from './Question.js';
+import { QUESTION_TYPES, SERVICE_QUALITY_CATEGORIES } from './Question.js';
 
 /**
  * One answer to one Question within one FeedbackSession. `questionType`
@@ -16,6 +16,19 @@ import { QUESTION_TYPES } from './Question.js';
  * `validateAnswerForQuestion` for the cross-field validation this
  * requires (same reasoning as Question's own options/questionType
  * cross-check in questionService.js).
+ *
+ * V2.5 — `serviceQualityCategory` is snapshotted from the answered
+ * Question at submission time, the same "copy now, never re-derive
+ * later" reasoning as `questionType` above. This is the historical-
+ * integrity mechanism backend/docs/v2/V2_5_SERVICE_QUALITY.md requires:
+ * a Question's own `serviceQualityCategory` can change after this
+ * answer was recorded (a survey can be unpublished, edited, and
+ * republished — questionService.js's assertParentSurveyEditable only
+ * blocks edits while published), but this snapshot never does, so
+ * service-quality analytics over historical answers stay trustworthy
+ * regardless of any later Question edit. `null` for every answer to a
+ * question with no category mapping — analytics must skip these, never
+ * misclassify them (see analyticsService.js's getServiceQualityAverages).
  */
 const feedbackAnswerSchema = new mongoose.Schema(
   {
@@ -37,6 +50,11 @@ const feedbackAnswerSchema = new mongoose.Schema(
     answer: {
       type: mongoose.Schema.Types.Mixed,
       required: true,
+    },
+    serviceQualityCategory: {
+      type: String,
+      enum: [...SERVICE_QUALITY_CATEGORIES, null],
+      default: null,
     },
   },
   { timestamps: true },

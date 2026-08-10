@@ -88,6 +88,13 @@ const FEEDBACK_SESSIONS = [
       { questionText: 'How would you rate your overall experience today?', answer: 5 },
       { questionText: 'Would you recommend our services to others?', answer: true },
       { questionText: 'Do you have any additional comments?', answer: 'The library staff were excellent.' },
+      // V2.5 — Library's category-mapped ratings, via the shared Global
+      // survey (Library Services Feedback stays draft — see
+      // surveySeeder.js — so this is currently the only published
+      // survey a Library tablet can answer these on).
+      { questionText: 'How courteous and helpful was the staff who assisted you?', answer: 3 },
+      { questionText: 'How clearly was the process or information explained to you?', answer: 4 },
+      { questionText: 'How satisfied are you with the waiting time for service?', answer: 5 },
     ],
   },
   {
@@ -101,6 +108,9 @@ const FEEDBACK_SESSIONS = [
       { questionText: 'How would you rate your overall experience today?', answer: 3 },
       { questionText: 'Would you recommend our services to others?', answer: true },
       { questionText: 'Do you have any additional comments?', answer: '' },
+      { questionText: 'How courteous and helpful was the staff who assisted you?', answer: 4 },
+      { questionText: 'How clearly was the process or information explained to you?', answer: 4 },
+      { questionText: 'How satisfied are you with the waiting time for service?', answer: 4 },
     ],
   },
   {
@@ -129,6 +139,14 @@ const FEEDBACK_SESSIONS = [
       { questionText: 'Which service did you avail today?', answer: 'Enrollment' },
       { questionText: 'Was your concern resolved?', answer: true },
       { questionText: 'Any suggestions for improvement?', answer: 'Keep up the great work!' },
+      // V2.5 — Registrar's own office-worded category ratings (see
+      // surveySeeder.js). Strong Courtesy/Clarity, weaker Waiting Time
+      // across FB007-010 — a deliberate, intentional contrast with
+      // Library's pattern (see FB004/FB005 above), so the Office ×
+      // Category heatmap has something real to show.
+      { questionText: 'How helpful and courteous was the staff who assisted you?', answer: 5 },
+      { questionText: 'How clearly was the registration process explained?', answer: 5 },
+      { questionText: 'How satisfied are you with the time it took to complete your transaction?', answer: 4 },
     ],
   },
   {
@@ -142,6 +160,9 @@ const FEEDBACK_SESSIONS = [
       { questionText: 'Which service did you avail today?', answer: 'Document Request' },
       { questionText: 'Was your concern resolved?', answer: true },
       { questionText: 'Any suggestions for improvement?', answer: 'Fast processing.' },
+      { questionText: 'How helpful and courteous was the staff who assisted you?', answer: 4 },
+      { questionText: 'How clearly was the registration process explained?', answer: 4 },
+      { questionText: 'How satisfied are you with the time it took to complete your transaction?', answer: 3 },
     ],
   },
   {
@@ -158,6 +179,9 @@ const FEEDBACK_SESSIONS = [
         questionText: 'Any suggestions for improvement?',
         answer: 'Still waiting for a response on my inquiry.',
       },
+      { questionText: 'How helpful and courteous was the staff who assisted you?', answer: 4 },
+      { questionText: 'How clearly was the registration process explained?', answer: 3 },
+      { questionText: 'How satisfied are you with the time it took to complete your transaction?', answer: 2 },
     ],
   },
   {
@@ -171,6 +195,9 @@ const FEEDBACK_SESSIONS = [
       { questionText: 'Which service did you avail today?', answer: 'Other' },
       { questionText: 'Was your concern resolved?', answer: true },
       { questionText: 'Any suggestions for improvement?', answer: 'No complaints, excellent service.' },
+      { questionText: 'How helpful and courteous was the staff who assisted you?', answer: 5 },
+      { questionText: 'How clearly was the registration process explained?', answer: 5 },
+      { questionText: 'How satisfied are you with the time it took to complete your transaction?', answer: 5 },
     ],
   },
 ];
@@ -271,7 +298,16 @@ export async function seedFeedback() {
 
       await FeedbackAnswer.findOneAndUpdate(
         { feedbackSessionId: session._id, questionId: question._id },
-        { $set: { questionType: question.questionType, answer: normalizedAnswer } },
+        {
+          $set: {
+            questionType: question.questionType,
+            answer: normalizedAnswer,
+            // V2.5 — snapshotted from the question's current mapping,
+            // exactly like feedbackService.createFeedbackSession does
+            // for a real submission (see that function's own comment).
+            serviceQualityCategory: question.serviceQualityCategory ?? null,
+          },
+        },
         { upsert: true, setDefaultsOnInsert: true },
       );
       answerCount += 1;

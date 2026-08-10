@@ -1,10 +1,49 @@
 import Question from '../models/Question.js';
 import Survey from '../models/Survey.js';
-import { QUESTION_TYPES } from '../models/Question.js';
+import { QUESTION_TYPES, SERVICE_QUALITY_CATEGORIES } from '../models/Question.js';
 import { ApiError } from '../utils/ApiError.js';
 import { isValidObjectId } from '../utils/isValidObjectId.js';
 
 const MIN_MULTIPLE_CHOICE_OPTIONS = 2;
+
+/**
+ * V2.5 — cross-field validation depending on the sibling `questionType`
+ * field, the same reasoning as `assertValidQuestionFields` above for
+ * `options`. `null`/`undefined` always passes (not every question needs
+ * a category, per backend/docs/v2/V2_5_SERVICE_QUALITY.md — free-text
+ * comments and non-management rating questions are expected to stay
+ * unmapped). Returns the normalized value to persist (`null` for
+ * "no category").
+ */
+export function assertValidServiceQualityCategory({ questionType, serviceQualityCategory }) {
+  if (serviceQualityCategory === undefined || serviceQualityCategory === null) {
+    return null;
+  }
+
+  if (!SERVICE_QUALITY_CATEGORIES.includes(serviceQualityCategory)) {
+    throw new ApiError(
+      400,
+      `serviceQualityCategory must be one of: ${SERVICE_QUALITY_CATEGORIES.join(', ')}, or null.`,
+      [
+        {
+          field: 'serviceQualityCategory',
+          message: `Must be one of: ${SERVICE_QUALITY_CATEGORIES.join(', ')}, or null.`,
+        },
+      ],
+    );
+  }
+
+  if (questionType !== 'rating') {
+    throw new ApiError(400, 'serviceQualityCategory is only allowed for rating questions.', [
+      {
+        field: 'serviceQualityCategory',
+        message: 'serviceQualityCategory may only be set on a rating question.',
+      },
+    ]);
+  }
+
+  return serviceQualityCategory;
+}
 
 /**
  * Cross-field validation that depends on `questionType` (a sibling
@@ -114,6 +153,32 @@ export async function updateQuestion(id, updates) {
       // the old options are no longer meaningful, so clear them rather
       // than rejecting a request that never mentioned options at all.
       question.options = [];
+    }
+  }
+
+  // V2.5 — mirrors the options-handling block above exactly (same
+  // sibling-field-depends-on-questionType reasoning).
+  if (updates.questionType !== undefined || updates.serviceQualityCategory !== undefined) {
+    if (resultingType === 'rating') {
+      const categoryToValidate =
+        updates.serviceQualityCategory !== undefined
+          ? updates.serviceQualityCategory
+          : question.serviceQualityCategory;
+      question.serviceQualityCategory = assertValidServiceQualityCategory({
+        questionType: 'rating',
+        serviceQualityCategory: categoryToValidate,
+      });
+    } else if (updates.serviceQualityCategory !== undefined) {
+      // The client explicitly sent a category alongside a non-rating
+      // type — a genuine client error, not stale leftover state.
+      question.serviceQualityCategory = assertValidServiceQualityCategory({
+        questionType: resultingType,
+        serviceQualityCategory: updates.serviceQualityCategory,
+      });
+    } else {
+      // Switching away from rating without resending serviceQualityCategory:
+      // no longer meaningful, clear it rather than leaving a stale value.
+      question.serviceQualityCategory = null;
     }
   }
 

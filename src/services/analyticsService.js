@@ -4,6 +4,7 @@ import FeedbackAnswer from '../models/FeedbackAnswer.js';
 import Department from '../models/Department.js';
 import Survey from '../models/Survey.js';
 import Location from '../models/Location.js';
+import { SERVICE_QUALITY_CATEGORIES } from '../models/Question.js';
 import { ApiError } from '../utils/ApiError.js';
 import { isValidObjectId } from '../utils/isValidObjectId.js';
 import { parseFilterDate } from '../utils/parseFilterDate.js';
@@ -518,4 +519,129 @@ export async function getFeedbackByMonth(filter) {
   }
 
   return months;
+}
+
+/**
+ * V2.5 — the three standardized management dimensions
+ * (backend/docs/v2/V2_5_SERVICE_QUALITY.md): Courtesy, Clarity, Waiting
+ * Time. `null` for a dimension with zero in-scope answers ("no data",
+ * never averaged as 0 — same distinction `getAverageRating` already
+ * makes). `overall` is the arithmetic mean of whichever dimensions
+ * actually have data (not a count-weighted average across all answers —
+ * matches the planning docs' own worked example: Courtesy 4.7 / Clarity
+ * 4.5 / Waiting Time 3.6 → Overall 4.27, i.e. mean of the three
+ * category averages), `null` only when every dimension is `null`.
+ */
+function emptyServiceQuality() {
+  return Object.fromEntries([...SERVICE_QUALITY_CATEGORIES.map((category) => [category, null]), ['overall', null]]);
+}
+
+function computeOverallServiceQuality(categoryAverages) {
+  const values = SERVICE_QUALITY_CATEGORIES.map((category) => categoryAverages[category]).filter(
+    (value) => value !== null,
+  );
+  if (values.length === 0) return null;
+  return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 100) / 100;
+}
+
+/**
+ * Institution/department-scoped Courtesy/Clarity/Waiting Time averages
+ * (plus derived Overall). Reads `FeedbackAnswer.serviceQualityCategory`
+ * — the historical snapshot taken at submission time (feedbackService.js)
+ * — never the live `Question.serviceQualityCategory`, so a later Survey
+ * edit can never retroactively change what an already-submitted answer
+ * counted toward (see backend/docs/v2/V2_5_SERVICE_QUALITY.md's Data
+ * Integrity requirement). An answer with no category mapping
+ * (`serviceQualityCategory: null` — most rating questions, and every
+ * non-rating question) is excluded by the `$in` match, never
+ * misclassified into one of the three dimensions.
+ */
+export async function getServiceQualityAverages(filter) {
+  if (filter === null) return emptyServiceQuality();
+
+  const sessionMatch = Object.fromEntries(Object.entries(filter).map(([field, value]) => [`session.${field}`, value]));
+
+  const rows = await FeedbackAnswer.aggregate([
+    { $match: { questionType: 'rating', serviceQualityCategory: { $in: SERVICE_QUALITY_CATEGORIES } } },
+    {
+      $lookup: {
+        from: 'feedbacksessions',
+        localField: 'feedbackSessionId',
+        foreignField: '_id',
+        as: 'session',
+      },
+    },
+    { $unwind: '$session' },
+    ...(Object.keys(sessionMatch).length > 0 ? [{ $match: sessionMatch }] : []),
+    { $group: { _id: '$serviceQualityCategory', averageRating: { $avg: '$answer' } } },
+  ]);
+
+  const result = emptyServiceQuality();
+  rows.forEach((row) => {
+    result[row._id] = Math.round(row.averageRating * 100) / 100;
+  });
+  result.overall = computeOverallServiceQuality(result);
+
+  return result;
+}
+
+/**
+ * The primary V2.5 heatmap: Office/Department × Service Quality
+ * Category. One row per department that has at least one in-scope,
+ * categorized rating answer — a department with none simply doesn't
+ * appear (matches `getFeedbackByDepartment`'s own "no rows, not
+ * zero-filled rows" convention), so the frontend can distinguish "no
+ * data yet" from "measured and it's low." Grouped by the *collecting*
+ * `session.departmentId` (tablet-derived, ADR-028), never the Question's
+ * own parent Survey department — identical reasoning to every other
+ * FeedbackSession-scoped aggregation in this file.
+ */
+export async function getServiceQualityByDepartment(filter) {
+  if (filter === null) return [];
+
+  const sessionMatch = Object.fromEntries(Object.entries(filter).map(([field, value]) => [`session.${field}`, value]));
+
+  const rows = await FeedbackAnswer.aggregate([
+    { $match: { questionType: 'rating', serviceQualityCategory: { $in: SERVICE_QUALITY_CATEGORIES } } },
+    {
+      $lookup: {
+        from: 'feedbacksessions',
+        localField: 'feedbackSessionId',
+        foreignField: '_id',
+        as: 'session',
+      },
+    },
+    { $unwind: '$session' },
+    ...(Object.keys(sessionMatch).length > 0 ? [{ $match: sessionMatch }] : []),
+    {
+      $group: {
+        _id: { departmentId: '$session.departmentId', category: '$serviceQualityCategory' },
+        averageRating: { $avg: '$answer' },
+      },
+    },
+  ]);
+
+  if (rows.length === 0) return [];
+
+  const departmentIds = [...new Set(rows.map((row) => row._id.departmentId.toString()))];
+  const departments = await Department.find({ _id: { $in: departmentIds } }).select('_id name');
+  const nameById = new Map(departments.map((department) => [department._id.toString(), department.name]));
+
+  const byDepartment = new Map();
+  rows.forEach((row) => {
+    const departmentId = row._id.departmentId.toString();
+    if (!byDepartment.has(departmentId)) {
+      byDepartment.set(departmentId, emptyServiceQuality());
+    }
+    byDepartment.get(departmentId)[row._id.category] = Math.round(row.averageRating * 100) / 100;
+  });
+
+  return [...byDepartment.entries()]
+    .map(([departmentId, categories]) => ({
+      departmentId,
+      departmentName: nameById.get(departmentId) ?? 'Unknown Department',
+      ...categories,
+      overall: computeOverallServiceQuality(categories),
+    }))
+    .sort((a, b) => a.departmentName.localeCompare(b.departmentName));
 }

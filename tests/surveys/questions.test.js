@@ -182,6 +182,56 @@ describe('POST /api/v1/surveys/:id/questions', () => {
     });
     expect(res.status).toBe(404);
   });
+
+  // V2.5 — Service Quality Category (backend/docs/v2/V2_5_SERVICE_QUALITY.md)
+  it('creates a rating question with a valid serviceQualityCategory', async () => {
+    const res = await createQuestion(roles.superAdmin.token, draftSurvey._id.toString(), {
+      questionText: 'How courteous was the staff?',
+      questionType: 'rating',
+      serviceQualityCategory: 'courtesy',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.question.serviceQualityCategory).toBe('courtesy');
+  });
+
+  it('creates a rating question with serviceQualityCategory omitted, defaulting to null', async () => {
+    const res = await createQuestion(roles.superAdmin.token, draftSurvey._id.toString(), {
+      questionText: 'How would you rate this in general?',
+      questionType: 'rating',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.question.serviceQualityCategory).toBeNull();
+  });
+
+  it('accepts an explicit null serviceQualityCategory', async () => {
+    const res = await createQuestion(roles.superAdmin.token, draftSurvey._id.toString(), {
+      questionText: 'Another general rating question',
+      questionType: 'rating',
+      serviceQualityCategory: null,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.question.serviceQualityCategory).toBeNull();
+  });
+
+  it('rejects an unrecognized serviceQualityCategory value with 400', async () => {
+    const res = await createQuestion(roles.superAdmin.token, draftSurvey._id.toString(), {
+      questionText: 'Bad category',
+      questionType: 'rating',
+      serviceQualityCategory: 'friendliness',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'serviceQualityCategory')).toBe(true);
+  });
+
+  it('rejects serviceQualityCategory on a non-rating question with 400', async () => {
+    const res = await createQuestion(roles.superAdmin.token, draftSurvey._id.toString(), {
+      questionText: 'Category on a yes/no question',
+      questionType: 'yes_no',
+      serviceQualityCategory: 'clarity',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'serviceQualityCategory')).toBe(true);
+  });
 });
 
 describe('PATCH /api/v1/questions/:id', () => {
@@ -285,5 +335,68 @@ describe('PATCH /api/v1/questions/:id', () => {
   it('handles an invalid id safely with 404', async () => {
     const res = await patchQuestion(roles.superAdmin.token, 'not-a-valid-id', { required: true });
     expect(res.status).toBe(404);
+  });
+
+  // V2.5 — Service Quality Category
+  it('sets serviceQualityCategory on an existing rating question', async () => {
+    const question = await Question.create({
+      surveyId: draftSurvey._id,
+      questionText: 'A rating question awaiting a category',
+      questionType: 'rating',
+      order: 100,
+    });
+
+    const res = await patchQuestion(roles.superAdmin.token, question._id.toString(), {
+      serviceQualityCategory: 'waiting_time',
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.question.serviceQualityCategory).toBe('waiting_time');
+  });
+
+  it('rejects an unrecognized serviceQualityCategory value on update with 400', async () => {
+    const question = await Question.create({
+      surveyId: draftSurvey._id,
+      questionText: 'Another rating question',
+      questionType: 'rating',
+      order: 101,
+    });
+
+    const res = await patchQuestion(roles.superAdmin.token, question._id.toString(), {
+      serviceQualityCategory: 'speed',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects setting serviceQualityCategory while also changing questionType away from rating', async () => {
+    const question = await Question.create({
+      surveyId: draftSurvey._id,
+      questionText: 'Rating question changing type',
+      questionType: 'rating',
+      order: 102,
+    });
+
+    const res = await patchQuestion(roles.superAdmin.token, question._id.toString(), {
+      questionType: 'short_text',
+      serviceQualityCategory: 'courtesy',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('clears serviceQualityCategory when questionType changes away from rating without resending it', async () => {
+    const question = await Question.create({
+      surveyId: draftSurvey._id,
+      questionText: 'Rating question losing its category',
+      questionType: 'rating',
+      order: 103,
+      serviceQualityCategory: 'clarity',
+    });
+
+    const res = await patchQuestion(roles.superAdmin.token, question._id.toString(), {
+      questionType: 'short_text',
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.question.serviceQualityCategory).toBeNull();
   });
 });

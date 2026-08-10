@@ -41,6 +41,34 @@ const SURVEYS = [
         required: false,
         order: 3,
       },
+      // V2.5 — the three standardized management dimensions
+      // (backend/docs/v2/V2_5_SERVICE_QUALITY.md), optional here since
+      // this is the shared system-wide survey rather than a
+      // department's own dedicated one — not every General Service
+      // Feedback submission needs to answer all three (see
+      // feedbackSeeder.js's REG-tablet sessions, which deliberately
+      // leave these unanswered to exercise "partial responses").
+      {
+        questionText: 'How courteous and helpful was the staff who assisted you?',
+        questionType: 'rating',
+        required: false,
+        order: 4,
+        serviceQualityCategory: 'courtesy',
+      },
+      {
+        questionText: 'How clearly was the process or information explained to you?',
+        questionType: 'rating',
+        required: false,
+        order: 5,
+        serviceQualityCategory: 'clarity',
+      },
+      {
+        questionText: 'How satisfied are you with the waiting time for service?',
+        questionType: 'rating',
+        required: false,
+        order: 6,
+        serviceQualityCategory: 'waiting_time',
+      },
     ],
   },
   {
@@ -73,6 +101,34 @@ const SURVEYS = [
         questionType: 'short_text',
         required: false,
         order: 4,
+      },
+      // V2.5 — Registrar's own office-specific wording for the same
+      // three standardized categories the Global survey above also
+      // carries (courtesy/clarity/waiting_time are canonical
+      // identifiers, not question text — see backend/docs/v2/
+      // V2_5_SERVICE_QUALITY.md). Required here, unlike the Global
+      // survey's copies — this is Registrar's own dedicated management
+      // survey.
+      {
+        questionText: 'How helpful and courteous was the staff who assisted you?',
+        questionType: 'rating',
+        required: true,
+        order: 5,
+        serviceQualityCategory: 'courtesy',
+      },
+      {
+        questionText: 'How clearly was the registration process explained?',
+        questionType: 'rating',
+        required: true,
+        order: 6,
+        serviceQualityCategory: 'clarity',
+      },
+      {
+        questionText: 'How satisfied are you with the time it took to complete your transaction?',
+        questionType: 'rating',
+        required: true,
+        order: 7,
+        serviceQualityCategory: 'waiting_time',
       },
     ],
   },
@@ -164,6 +220,7 @@ export async function seedSurveys() {
               required: questionDefinition.required,
               order: questionDefinition.order,
               options: questionDefinition.options || [],
+              serviceQualityCategory: questionDefinition.serviceQualityCategory ?? null,
             },
           },
         );
@@ -175,6 +232,7 @@ export async function seedSurveys() {
           required: questionDefinition.required,
           order: questionDefinition.order,
           options: questionDefinition.options || [],
+          serviceQualityCategory: questionDefinition.serviceQualityCategory ?? null,
         });
         await Survey.updateOne({ _id: survey._id }, { $inc: { questionCount: 1 } });
       }
