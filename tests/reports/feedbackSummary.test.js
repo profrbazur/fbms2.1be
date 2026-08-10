@@ -75,7 +75,9 @@ describe('GET /api/v1/reports/feedback-summary', () => {
       const { summary } = res.body.data;
 
       expect(summary.totalFeedback).toBe(10);
-      expect(summary.averageRating).toBeCloseTo(3.7, 2);
+      // 10 original rating answers (sum 37) + 18 V2.5 Courtesy/Clarity/
+      // Waiting Time answers (sum 73) = 110 / 28.
+      expect(summary.averageRating).toBeCloseTo(110 / 28, 2);
       expect(summary.activeSurveysCount).toBe(2);
       expect(summary.activeTabletsCount).toBe(4);
       expect(summary.departmentsRepresented).toBe(2);
@@ -129,7 +131,9 @@ describe('GET /api/v1/reports/feedback-summary', () => {
       const { summary } = res.body.data;
 
       expect(summary.totalFeedback).toBe(8);
-      expect(summary.averageRating).toBeCloseTo(3.625, 2);
+      // 29 / 8 original + 49 / 12 from V2.5's FB007-010 category answers
+      // = 78 / 20.
+      expect(summary.averageRating).toBeCloseTo(78 / 20, 2);
       expect(summary.activeTabletsCount).toBe(2);
       expect(summary.departmentsRepresented).toBe(1);
     });
@@ -139,6 +143,7 @@ describe('GET /api/v1/reports/feedback-summary', () => {
       const { summary } = res.body.data;
 
       expect(summary.totalFeedback).toBe(2);
+      // 8 / 2 original + 24 / 6 from V2.5's category answers = 32 / 8 = 4.
       expect(summary.averageRating).toBeCloseTo(4, 2);
       expect(summary.activeTabletsCount).toBe(2);
       expect(summary.departmentsRepresented).toBe(1);
@@ -184,7 +189,9 @@ describe('GET /api/v1/reports/feedback-summary', () => {
       expect(summary.activeSurveysCount).toBeGreaterThan(0);
 
       const ratingTotal = ratingDistribution.reduce((sum, r) => sum + r.count, 0);
-      expect(ratingTotal).toBe(2);
+      // 2 original rating answers + 6 V2.5 Courtesy/Clarity/Waiting Time
+      // answers across Library's two sessions.
+      expect(ratingTotal).toBe(8);
 
       expect(feedbackByDepartment).toHaveLength(1);
       expect(feedbackByDepartment[0]).toMatchObject({ departmentName: 'Library', count: 2 });
@@ -310,25 +317,32 @@ describe('GET /api/v1/reports/feedback-summary', () => {
 
     it('returns exact counts and percentages for Super Admin (system-wide)', async () => {
       const res = await getReport(roles.superAdmin.token, FULL_FIXTURE_RANGE);
+      // 28 total rating answers post-V2.5 (10 original "overall
+      // satisfaction" ratings + 18 Courtesy/Clarity/Waiting Time answers
+      // on FB004/005/007-010) — distribution includes every rating-type
+      // answer regardless of serviceQualityCategory, per
+      // getRatingDistribution's own "use only rating-type answers, never
+      // filtered by category" contract.
       expect(res.body.data.ratingDistribution).toEqual([
-        { rating: 1, count: 1, percentage: 10 },
-        { rating: 2, count: 1, percentage: 10 },
-        { rating: 3, count: 2, percentage: 20 },
-        { rating: 4, count: 2, percentage: 20 },
-        { rating: 5, count: 4, percentage: 40 },
+        { rating: 1, count: 1, percentage: 3.57 },
+        { rating: 2, count: 2, percentage: 7.14 },
+        { rating: 3, count: 5, percentage: 17.86 },
+        { rating: 4, count: 10, percentage: 35.71 },
+        { rating: 5, count: 10, percentage: 35.71 },
       ]);
     });
 
     it('is department-scoped for a Department Head', async () => {
       const res = await getReport(roles.registrarHead.token, FULL_FIXTURE_RANGE);
       const total = res.body.data.ratingDistribution.reduce((sum, r) => sum + r.count, 0);
-      expect(total).toBe(8);
+      // 8 original + 12 V2.5 category answers (FB007-010).
+      expect(total).toBe(20);
     });
 
     it('never infers a rating from a non-rating answer', async () => {
       const res = await getReport(roles.superAdmin.token, FULL_FIXTURE_RANGE);
       const total = res.body.data.ratingDistribution.reduce((sum, r) => sum + r.count, 0);
-      expect(total).toBe(10); // exactly one rating answer per seeded session, never more
+      expect(total).toBe(28); // every seeded rating-type answer, never a non-rating one
     });
   });
 
@@ -344,7 +358,7 @@ describe('GET /api/v1/reports/feedback-summary', () => {
       const registrarRow = feedbackByDepartment.find((r) => r.departmentId === registrarDept._id.toString());
       const libraryRow = feedbackByDepartment.find((r) => r.departmentId === libraryDept._id.toString());
       expect(registrarRow).toMatchObject({ departmentName: 'Registrar', count: 8 });
-      expect(registrarRow.averageRating).toBeCloseTo(3.625, 2);
+      expect(registrarRow.averageRating).toBeCloseTo(78 / 20, 2);
       expect(libraryRow).toMatchObject({ departmentName: 'Library', count: 2 });
       expect(libraryRow.averageRating).toBeCloseTo(4, 2);
     });
@@ -364,9 +378,13 @@ describe('GET /api/v1/reports/feedback-summary', () => {
       const generalRow = feedbackBySurvey.find((r) => r.surveyTitle === 'General Service Feedback');
       const registrarRow = feedbackBySurvey.find((r) => r.surveyTitle === 'Registrar Office Feedback');
       expect(generalRow.count).toBe(6);
-      expect(generalRow.averageRating).toBeCloseTo(20 / 6, 2);
+      // Original 20/6 + V2.5's FB004/005 Courtesy/Clarity/Waiting Time
+      // (12+12=24 over 6 more answers) = 44/12.
+      expect(generalRow.averageRating).toBeCloseTo(44 / 12, 2);
       expect(registrarRow.count).toBe(4);
-      expect(registrarRow.averageRating).toBeCloseTo(4.25, 2);
+      // Original 17/4 + V2.5's FB007-010 category answers (49 over 12
+      // more) = 66/16.
+      expect(registrarRow.averageRating).toBeCloseTo(66 / 16, 2);
     });
 
     it('a Global survey appears for a department that collected feedback against it', async () => {
@@ -389,7 +407,9 @@ describe('GET /api/v1/reports/feedback-summary', () => {
         departmentName: 'Registrar',
         count: 5,
       });
-      expect(loc01Row.averageRating).toBeCloseTo(3.6, 2);
+      // Original 18/5 (FB001,002,006,007,009) + V2.5's FB007/009 category
+      // answers (14+9=23 over 6 more answers) = 41/11.
+      expect(loc01Row.averageRating).toBeCloseTo(41 / 11, 2);
 
       const total = feedbackByLocation.reduce((sum, row) => sum + row.count, 0);
       expect(total).toBe(res.body.data.summary.totalFeedback);

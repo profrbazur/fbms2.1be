@@ -33,19 +33,27 @@ afterAll(async () => {
   await disconnectTestDb();
 });
 
+// V2.5 — Registrar Office Feedback grew from 4 to 7 questions (three new
+// required Courtesy/Clarity/Waiting Time rating questions were added, see
+// surveySeeder.js). Answers every currently-loaded question rather than
+// hardcoding a fixed 4, matching what a real client does (it always
+// fetches the current question set via GET /survey before submitting).
 function buildValidPayload(overrides = {}) {
-  const [rating, multipleChoice, yesNo, shortText] = registrarQuestions;
-
   return {
     surveyId: registrarSurvey._id.toString(),
     submittedAt: '2026-08-06T09:00:00.000Z',
     completedAt: '2026-08-06T09:02:00.000Z',
-    answers: [
-      { questionId: rating._id.toString(), answer: 5 },
-      { questionId: multipleChoice._id.toString(), answer: multipleChoice.options[0] },
-      { questionId: yesNo._id.toString(), answer: true },
-      { questionId: shortText._id.toString(), answer: 'Great service.' },
-    ],
+    answers: registrarQuestions.map((question) => ({
+      questionId: question._id.toString(),
+      answer:
+        question.questionType === 'multiple_choice'
+          ? question.options[0]
+          : question.questionType === 'yes_no'
+            ? true
+            : question.questionType === 'rating'
+              ? 5
+              : 'Great service.',
+    })),
     ...overrides,
   };
 }
@@ -149,7 +157,7 @@ describe('POST /api/v1/mobile/feedback', () => {
     expect(session.referenceCode).toMatch(/^FB-2026-0000\d{2}$/);
 
     const answers = await FeedbackAnswer.find({ feedbackSessionId: session._id });
-    expect(answers.length).toBe(4);
+    expect(answers.length).toBe(registrarQuestions.length);
   });
 
   it('the created session is immediately visible through the existing admin GET /api/v1/feedback endpoint (P5.0 compatibility)', async () => {
@@ -166,7 +174,7 @@ describe('POST /api/v1/mobile/feedback', () => {
       .set({ Authorization: `Bearer ${roles.superAdmin.token}` });
 
     expect(detailRes.status).toBe(200);
-    expect(detailRes.body.data.answers.length).toBe(4);
+    expect(detailRes.body.data.answers.length).toBe(registrarQuestions.length);
   });
 
   it('continues the reference-code sequence started by the seeder without collision', async () => {

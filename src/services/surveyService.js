@@ -6,7 +6,7 @@ import { escapeRegExp } from '../utils/escapeRegExp.js';
 import { parsePositiveInt } from '../utils/parsePositiveInt.js';
 import { isGlobalReadRole } from '../utils/roleScope.js';
 import { assertDepartmentIsUsable, assertLocationIsUsable } from './locationService.js';
-import { assertValidQuestionFields, nextQuestionOrder } from './questionService.js';
+import { assertValidQuestionFields, assertValidServiceQualityCategory, nextQuestionOrder } from './questionService.js';
 
 /**
  * Enforces "exactly one of Global / Department / Location" (this
@@ -328,9 +328,10 @@ export async function createQuestionForSurvey(surveyId, payload) {
 
   assertSurveyEditable(survey);
 
-  const { questionText, questionType, required = false, order, options } = payload;
+  const { questionText, questionType, required = false, order, options, serviceQualityCategory } = payload;
 
   const normalizedOptions = assertValidQuestionFields({ questionType, options });
+  const normalizedCategory = assertValidServiceQualityCategory({ questionType, serviceQualityCategory });
   const resolvedOrder = order !== undefined ? order : await nextQuestionOrder(survey._id);
 
   const question = await Question.create({
@@ -340,6 +341,7 @@ export async function createQuestionForSurvey(surveyId, payload) {
     required,
     order: resolvedOrder,
     options: normalizedOptions,
+    serviceQualityCategory: normalizedCategory,
   });
 
   await Survey.updateOne({ _id: survey._id }, { $inc: { questionCount: 1 } });

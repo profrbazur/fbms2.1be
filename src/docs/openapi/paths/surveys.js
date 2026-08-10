@@ -21,6 +21,12 @@ const questionCreateBody = {
     required: { type: 'boolean' },
     order: { type: 'integer', minimum: 1 },
     options: { type: 'array', items: { type: 'string' }, description: 'Required only when questionType is multiple_choice.' },
+    serviceQualityCategory: {
+      type: 'string',
+      enum: ['courtesy', 'clarity', 'waiting_time'],
+      nullable: true,
+      description: 'V2.5. Only allowed when questionType is rating; null (or omitted) means no standardized category mapping.',
+    },
   },
 };
 
@@ -227,6 +233,12 @@ export const surveysPaths = {
                 required: { type: 'boolean' },
                 order: { type: 'integer', minimum: 1 },
                 options: { type: 'array', items: { type: 'string' } },
+                serviceQualityCategory: {
+                  type: 'string',
+                  enum: ['courtesy', 'clarity', 'waiting_time'],
+                  nullable: true,
+                  description: 'V2.5. Only allowed when the resulting questionType is rating.',
+                },
               },
             },
           },

@@ -3,7 +3,6 @@ import request from 'supertest';
 import app from '../../src/app.js';
 import Survey from '../../src/models/Survey.js';
 import Question from '../../src/models/Question.js';
-import Tablet from '../../src/models/Tablet.js';
 import Personnel from '../../src/models/Personnel.js';
 import FeedbackSession from '../../src/models/FeedbackSession.js';
 import { resetAndSeed } from '../utils/seedTestUsers.js';
@@ -26,14 +25,12 @@ const submitFeedbackV2 = (headers, body) =>
 let deviceSecret;
 let registrarSurvey;
 let registrarQuestions;
-let tablet;
 let roles;
 
 beforeAll(async () => {
   await resetAndSeed();
   roles = await loginAllSeededRoles();
   ({ deviceSecret } = await activateTabletByDeviceCode('REG-TAB-01'));
-  tablet = await Tablet.findOne({ deviceCode: 'REG-TAB-01' });
   registrarSurvey = await Survey.findOne({ title: 'Registrar Office Feedback' });
   registrarQuestions = await Question.find({ surveyId: registrarSurvey._id }).sort({ order: 1 });
 });
@@ -42,19 +39,26 @@ afterAll(async () => {
   await disconnectTestDb();
 });
 
+// V2.5 — Registrar Office Feedback grew from 4 to 7 questions (three new
+// required Courtesy/Clarity/Waiting Time rating questions were added, see
+// surveySeeder.js). Answers every currently-loaded question rather than
+// hardcoding a fixed 4, matching what a real client does.
 function buildValidPayload(overrides = {}) {
-  const [rating, multipleChoice, yesNo, shortText] = registrarQuestions;
-
   return {
     surveyId: registrarSurvey._id.toString(),
     submittedAt: '2026-08-06T09:00:00.000Z',
     completedAt: '2026-08-06T09:02:00.000Z',
-    answers: [
-      { questionId: rating._id.toString(), answer: 5 },
-      { questionId: multipleChoice._id.toString(), answer: multipleChoice.options[0] },
-      { questionId: yesNo._id.toString(), answer: true },
-      { questionId: shortText._id.toString(), answer: 'Great service.' },
-    ],
+    answers: registrarQuestions.map((question) => ({
+      questionId: question._id.toString(),
+      answer:
+        question.questionType === 'multiple_choice'
+          ? question.options[0]
+          : question.questionType === 'yes_no'
+            ? true
+            : question.questionType === 'rating'
+              ? 5
+              : 'Great service.',
+    })),
     ...overrides,
   };
 }

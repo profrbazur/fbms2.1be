@@ -72,8 +72,10 @@ describe('GET /api/v1/dashboard/summary', () => {
 
     it('returns the correct system-wide average rating', async () => {
       const res = await getSummary(roles.superAdmin.token);
-      // Ten rating answers across the seeded sessions: 5,4,2,5,3,1,5,4,3,5 -> sum 37 / 10
-      expect(res.body.data.cards.averageRating).toBeCloseTo(3.7, 2);
+      // Ten original rating answers: 5,4,2,5,3,1,5,4,3,5 -> sum 37.
+      // V2.5 adds 18 more rating answers (Courtesy/Clarity/Waiting Time,
+      // FB004/005/007-010) summing to 73 -> combined 110 / 28.
+      expect(res.body.data.cards.averageRating).toBeCloseTo(110 / 28, 2);
     });
 
     it('feedbackToday is 0 against historical seeded data alone', async () => {
@@ -91,7 +93,9 @@ describe('GET /api/v1/dashboard/summary', () => {
       expect(cards.locationsCount).toBe(2);
       expect(cards.tabletsCount).toBe(2);
       expect(cards.totalFeedback).toBe(8);
-      expect(cards.averageRating).toBeCloseTo(3.625, 2); // 5+4+2+1+5+4+3+5 = 29 / 8
+      // Original: 5+4+2+1+5+4+3+5 = 29 / 8. V2.5 adds Courtesy/Clarity/
+      // Waiting Time answers on FB007-010 only (49 / 12 more) -> 78 / 20.
+      expect(cards.averageRating).toBeCloseTo(78 / 20, 2);
     });
 
     it('Library Personnel sees only Library-department totals', async () => {
@@ -102,7 +106,9 @@ describe('GET /api/v1/dashboard/summary', () => {
       expect(cards.locationsCount).toBe(2);
       expect(cards.tabletsCount).toBe(2);
       expect(cards.totalFeedback).toBe(2);
-      expect(cards.averageRating).toBeCloseTo(4, 2); // 5+3 = 8 / 2
+      // Original: 5+3 = 8 / 2. V2.5 adds Courtesy/Clarity/Waiting Time on
+      // both Library sessions (24 / 6 more) -> 32 / 8 = 4 (unchanged).
+      expect(cards.averageRating).toBeCloseTo(4, 2);
     });
 
     it('a department-scoped role can never see another department\'s counts, even indirectly', async () => {

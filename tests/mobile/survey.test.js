@@ -31,8 +31,10 @@ describe('GET /api/v1/mobile/survey', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.survey.title).toBe('Registrar Office Feedback');
-    expect(res.body.data.questions.length).toBe(4);
-    expect(res.body.data.questions.map((q) => q.order)).toEqual([1, 2, 3, 4]);
+    // V2.5 — grew from 4 to 7 questions (three new Courtesy/Clarity/
+    // Waiting Time rating questions appended at order 5-7).
+    expect(res.body.data.questions.length).toBe(7);
+    expect(res.body.data.questions.map((q) => q.order)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
   it('resolves the Global survey when no Location or Department survey exists (Library tablet — its own department survey is still a draft)', async () => {

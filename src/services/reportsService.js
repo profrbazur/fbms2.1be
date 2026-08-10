@@ -17,7 +17,27 @@ import {
   getFeedbackByDepartment,
   getFeedbackBySurvey,
   getFeedbackByLocation,
+  getServiceQualityAverages,
+  getServiceQualityByDepartment,
 } from './analyticsService.js';
+
+/**
+ * V2.5 — API responses always use camelCase (`waitingTime`), while the
+ * stored/internal category identifier stays the planning-doc-mandated
+ * `waiting_time` (Question.serviceQualityCategory's enum value) — this
+ * is the one boundary where the two representations meet.
+ */
+function toApiServiceQuality({ courtesy, clarity, waiting_time: waitingTime, overall }) {
+  return { courtesy, clarity, waitingTime, overall };
+}
+
+function serviceQualityByDepartmentToApi(rows) {
+  return rows.map(({ departmentId, departmentName, ...categories }) => ({
+    departmentId,
+    departmentName,
+    ...toApiServiceQuality(categories),
+  }));
+}
 
 // Version 1's survey/tablet counts are small (the seeder ships 3 surveys,
 // 4 tablets); a flat 100-row cap on the underlying list queries (already
@@ -51,6 +71,7 @@ function emptyFeedbackSummaryReport(filters) {
     feedbackByLocation: [],
     surveyPerformance: [],
     tabletContribution: [],
+    serviceQuality: { courtesy: null, clarity: null, waitingTime: null, overall: null, byDepartment: [] },
   };
 }
 
@@ -259,6 +280,8 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     ratingBySurvey,
     ratingByLocation,
     surveys,
+    serviceQualityAverages,
+    serviceQualityByDepartmentBase,
   ] = await Promise.all([
     FeedbackSession.countDocuments(filter),
     getAverageRating(filter),
@@ -287,6 +310,8 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     getRatingAveragesByField(filter, 'session.surveyId'),
     getRatingAveragesByField(filter, 'session.locationId'),
     listVisibleSurveysForReport(user, { departmentId, surveyId }),
+    getServiceQualityAverages(filter),
+    getServiceQualityByDepartment(filter),
   ]);
 
   const tabletExtraMatch = {};
@@ -318,5 +343,17 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     feedbackByLocation,
     surveyPerformance: buildSurveyPerformance(surveys, feedbackBySurveyBase, ratingBySurvey),
     tabletContribution,
+    // V2.5 — Courtesy/Clarity/Waiting Time/Overall, scoped identically to
+    // every other section above (system-wide for Super Admin/Senior
+    // Leadership, department-pinned otherwise). `byDepartment` is the
+    // Office × Category heatmap — only meaningful as a cross-department
+    // comparison, same "a scoped caller's response is always a single
+    // trivial row" reasoning as feedbackByDepartment (the frontend hides
+    // this table for Department Head/Personnel, mirroring that table's
+    // own established convention).
+    serviceQuality: {
+      ...toApiServiceQuality(serviceQualityAverages),
+      byDepartment: serviceQualityByDepartmentToApi(serviceQualityByDepartmentBase),
+    },
   };
 }

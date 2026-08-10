@@ -195,7 +195,10 @@ describe('GET /api/v1/feedback/:id', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.feedbackSession.referenceCode).toBe('FB-2026-000007');
-    expect(res.body.data.answers.length).toBe(4);
+    // V2.5 — Registrar Office Feedback grew from 4 to 7 questions (three
+    // new Courtesy/Clarity/Waiting Time rating questions), and FB007 was
+    // seeded to answer all of them.
+    expect(res.body.data.answers.length).toBe(7);
   });
 
   it('returns answers sorted by the answered question\'s order, with question text populated', async () => {
@@ -203,7 +206,7 @@ describe('GET /api/v1/feedback/:id', () => {
     const res = await getFeedback(roles.superAdmin.token, target._id.toString());
 
     const orders = res.body.data.answers.map((a) => a.questionId.order);
-    expect(orders).toEqual([1, 2, 3, 4]);
+    expect(orders).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(res.body.data.answers[0].questionId.questionText).toBe(
       'How satisfied are you with the registration process?',
     );

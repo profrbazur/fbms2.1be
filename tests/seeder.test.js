@@ -333,7 +333,9 @@ describe('surveySeeder', () => {
     const survey = await Survey.findOne({ title: 'Registrar Office Feedback' });
     const questions = await Question.find({ surveyId: survey._id }).sort({ order: 1 });
 
-    expect(questions.map((q) => q.order)).toEqual([1, 2, 3, 4]);
+    // V2.5 — grew from 4 to 7 questions (three new Courtesy/Clarity/
+    // Waiting Time rating questions appended at order 5-7).
+    expect(questions.map((q) => q.order)).toEqual([1, 2, 3, 4, 5, 6, 7]);
     const multipleChoice = questions.find((q) => q.questionType === 'multiple_choice');
     expect(multipleChoice.options.length).toBeGreaterThanOrEqual(2);
   });

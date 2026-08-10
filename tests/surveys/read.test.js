@@ -177,8 +177,10 @@ describe('GET /api/v1/surveys/:id/questions', () => {
     const res = await listQuestions(roles.superAdmin.token, survey._id.toString());
 
     expect(res.status).toBe(200);
-    expect(res.body.data.questions.length).toBe(4);
-    expect(res.body.data.questions.map((q) => q.order)).toEqual([1, 2, 3, 4]);
+    // V2.5 — grew from 4 to 7 questions (three new Courtesy/Clarity/
+    // Waiting Time rating questions appended at order 5-7).
+    expect(res.body.data.questions.length).toBe(7);
+    expect(res.body.data.questions.map((q) => q.order)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
   it('rejects a Department Head requesting questions for another department\'s survey with 403', async () => {
