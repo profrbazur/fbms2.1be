@@ -43,6 +43,10 @@ export const AUDIT_ACTIONS = [
   'survey.archive',
   'question.create',
   'question.update',
+  'serviceType.create',
+  'serviceType.update',
+  'serviceType.activate',
+  'serviceType.deactivate',
   'developerPortal.reload_canonical_dataset',
 ];
 
@@ -56,6 +60,7 @@ export const AUDIT_ENTITY_TYPES = [
   'tablet',
   'survey',
   'question',
+  'serviceType',
   'developerPortal',
 ];
 

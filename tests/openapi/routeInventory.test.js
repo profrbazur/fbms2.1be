@@ -31,14 +31,18 @@ describe('API inventory regression (Express routes vs. OpenAPI paths)', () => {
    * the time. docs/v2/V2_API_VERSIONING.md's "Additive Changes" policy
    * explicitly allows new, backward-compatible endpoints to remain
    * under /api/v1 — V2.3 added 4 Building endpoints
-   * (GET/POST /buildings, GET/PATCH /buildings/{id}), and V2.4 added 3
+   * (GET/POST /buildings, GET/PATCH /buildings/{id}), V2.4 added 3
    * more (POST /personnel/{id}/regenerate-pin, GET /service-sessions,
    * GET /service-sessions/{id}) — the admin-facing, additive half of
    * V2.4; the breaking kiosk workflow itself lives under
-   * /api/v2/mobile/*, outside this /api/v1-only inventory by design.
+   * /api/v2/mobile/*, outside this /api/v1-only inventory by design —
+   * and V2.6 added 4 Service Type endpoints (GET/POST /service-types,
+   * GET/PATCH /service-types/{id}), the admin-facing half of that phase
+   * (its own breaking-workflow-adjacent addition, GET
+   * /api/v2/mobile/service-types, is likewise outside this inventory).
    */
-  it('matches the current endpoint count (53 frozen V1 + 4 additive V2.3 Building + 3 additive V2.4 endpoints)', () => {
-    expect(ROUTE_INVENTORY.length).toBe(60);
+  it('matches the current endpoint count (53 frozen V1 + 4 additive V2.3 Building + 3 additive V2.4 + 4 additive V2.6 Service Type endpoints)', () => {
+    expect(ROUTE_INVENTORY.length).toBe(64);
   });
 
   /**

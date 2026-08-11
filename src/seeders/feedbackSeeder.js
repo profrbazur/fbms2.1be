@@ -3,6 +3,7 @@ import Question from '../models/Question.js';
 import Tablet from '../models/Tablet.js';
 import Personnel from '../models/Personnel.js';
 import ServiceSession from '../models/ServiceSession.js';
+import ServiceType from '../models/ServiceType.js';
 import FeedbackSession from '../models/FeedbackSession.js';
 import FeedbackAnswer from '../models/FeedbackAnswer.js';
 import { validateAnswerForQuestion } from '../services/feedbackService.js';
@@ -22,6 +23,15 @@ import { validateAnswerForQuestion } from '../services/feedbackService.js';
  * question text/order and re-validated through
  * feedbackService.validateAnswerForQuestion — the exact validation a
  * future mobile submission endpoint will also use.
+ *
+ * V2.6 — six sessions (FB004, FB005, FB007-010) additionally carry a
+ * `serviceTypeCode`, spread across four distinct Registrar service
+ * types and two distinct Library service types (see
+ * serviceTypeSeeder.js), so both "multiple service types per
+ * department" and the Office × Service Type analytics have real data.
+ * FB001-003 and FB006 deliberately have no serviceTypeCode at all —
+ * legacy/unattributed feedback that must remain readable and must never
+ * be misclassified into any service type.
  */
 const FEEDBACK_SESSIONS = [
   {
@@ -84,6 +94,8 @@ const FEEDBACK_SESSIONS = [
     submittedAt: '2026-07-25T14:20:00.000Z',
     completedAt: '2026-07-25T14:21:15.000Z',
     attributedEmployeeNumber: 'LIB-0002',
+    // V2.6 — see this file's own FEEDBACK_SESSIONS comment.
+    serviceTypeCode: 'LIB-SVC-01',
     answers: [
       { questionText: 'How would you rate your overall experience today?', answer: 5 },
       { questionText: 'Would you recommend our services to others?', answer: true },
@@ -104,6 +116,7 @@ const FEEDBACK_SESSIONS = [
     submittedAt: '2026-07-27T11:00:00.000Z',
     completedAt: '2026-07-27T11:01:20.000Z',
     attributedEmployeeNumber: 'LIB-0003',
+    serviceTypeCode: 'LIB-SVC-03',
     answers: [
       { questionText: 'How would you rate your overall experience today?', answer: 3 },
       { questionText: 'Would you recommend our services to others?', answer: true },
@@ -134,6 +147,7 @@ const FEEDBACK_SESSIONS = [
     tabletDeviceCode: 'REG-TAB-01',
     submittedAt: '2026-07-30T09:05:00.000Z',
     completedAt: '2026-07-30T09:07:00.000Z',
+    serviceTypeCode: 'REG-SVC-01',
     answers: [
       { questionText: 'How satisfied are you with the registration process?', answer: 5 },
       { questionText: 'Which service did you avail today?', answer: 'Enrollment' },
@@ -155,6 +169,7 @@ const FEEDBACK_SESSIONS = [
     tabletDeviceCode: 'REG-TAB-02',
     submittedAt: '2026-08-01T15:30:00.000Z',
     completedAt: '2026-08-01T15:32:10.000Z',
+    serviceTypeCode: 'REG-SVC-03',
     answers: [
       { questionText: 'How satisfied are you with the registration process?', answer: 4 },
       { questionText: 'Which service did you avail today?', answer: 'Document Request' },
@@ -171,6 +186,7 @@ const FEEDBACK_SESSIONS = [
     tabletDeviceCode: 'REG-TAB-01',
     submittedAt: '2026-08-03T10:10:00.000Z',
     completedAt: '2026-08-03T10:11:45.000Z',
+    serviceTypeCode: 'REG-SVC-02',
     answers: [
       { questionText: 'How satisfied are you with the registration process?', answer: 3 },
       { questionText: 'Which service did you avail today?', answer: 'Grade Inquiry' },
@@ -190,6 +206,7 @@ const FEEDBACK_SESSIONS = [
     tabletDeviceCode: 'REG-TAB-02',
     submittedAt: '2026-08-05T16:00:00.000Z',
     completedAt: '2026-08-05T16:01:35.000Z',
+    serviceTypeCode: 'REG-SVC-06',
     answers: [
       { questionText: 'How satisfied are you with the registration process?', answer: 5 },
       { questionText: 'Which service did you avail today?', answer: 'Other' },
@@ -265,6 +282,24 @@ export async function seedFeedback() {
       }
     }
 
+    // V2.6 — resolves the optional Service Type snapshot (see this
+    // file's own FEEDBACK_SESSIONS comment). Silently stays null (not an
+    // error) when the definition has no serviceTypeCode, or the
+    // referenced ServiceType doesn't exist yet — the same "skip if a
+    // dependency is missing" convention used throughout, and also the
+    // deliberate mechanism for exercising "legacy feedback without a
+    // Service Type" (FB001-003, FB006 have no serviceTypeCode at all).
+    let serviceTypeId = null;
+    if (definition.serviceTypeCode) {
+      const serviceType = await ServiceType.findOne({
+        departmentId: tablet.departmentId,
+        code: definition.serviceTypeCode,
+      });
+      if (serviceType) {
+        serviceTypeId = serviceType._id;
+      }
+    }
+
     const session = await FeedbackSession.findOneAndUpdate(
       { referenceCode: definition.referenceCode },
       {
@@ -278,6 +313,7 @@ export async function seedFeedback() {
           durationSeconds,
           status: 'completed',
           ...attribution,
+          serviceTypeId,
         },
       },
       { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },

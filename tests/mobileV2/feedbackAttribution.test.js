@@ -4,6 +4,8 @@ import app from '../../src/app.js';
 import Survey from '../../src/models/Survey.js';
 import Question from '../../src/models/Question.js';
 import Personnel from '../../src/models/Personnel.js';
+import Department from '../../src/models/Department.js';
+import ServiceType from '../../src/models/ServiceType.js';
 import FeedbackSession from '../../src/models/FeedbackSession.js';
 import { resetAndSeed } from '../utils/seedTestUsers.js';
 import { loginAllSeededRoles } from '../utils/authTokens.js';
@@ -25,6 +27,7 @@ const submitFeedbackV2 = (headers, body) =>
 let deviceSecret;
 let registrarSurvey;
 let registrarQuestions;
+let registrarServiceType;
 let roles;
 
 beforeAll(async () => {
@@ -33,6 +36,12 @@ beforeAll(async () => {
   ({ deviceSecret } = await activateTabletByDeviceCode('REG-TAB-01'));
   registrarSurvey = await Survey.findOne({ title: 'Registrar Office Feedback' });
   registrarQuestions = await Question.find({ surveyId: registrarSurvey._id }).sort({ order: 1 });
+  const registrarDept = await Department.findOne({ code: 'REG' });
+  // V2.6 — POST /api/v2/mobile/feedback now requires serviceTypeId; any
+  // active Registrar service type works for this file's attribution
+  // scenarios, which are not about Service Type behavior itself (see
+  // tests/mobileV2/serviceTypeAttribution.test.js for that coverage).
+  registrarServiceType = await ServiceType.findOne({ departmentId: registrarDept._id, code: 'REG-SVC-01' });
 });
 
 afterAll(async () => {
@@ -48,6 +57,7 @@ function buildValidPayload(overrides = {}) {
     surveyId: registrarSurvey._id.toString(),
     submittedAt: '2026-08-06T09:00:00.000Z',
     completedAt: '2026-08-06T09:02:00.000Z',
+    serviceTypeId: registrarServiceType._id.toString(),
     answers: registrarQuestions.map((question) => ({
       questionId: question._id.toString(),
       answer:
@@ -142,10 +152,13 @@ describe('POST /api/v2/mobile/feedback — historical attribution', () => {
   });
 
   it('v1 feedback submissions remain unattributed (personnelId/serviceSessionId null) and stay readable', async () => {
-    const res = await submitFeedbackV1(
-      deviceAuthHeader(deviceSecret),
-      buildValidPayload({ submittedAt: '2026-08-06T11:00:00.000Z', completedAt: '2026-08-06T11:01:00.000Z' }),
-    );
+    // V2.6 — serviceTypeId is a v2-only concept; v1's contract stays
+    // exactly as it was, so it must be stripped before calling v1 (v1
+    // rejects it as an unknown field, same as personnelId/serviceSessionId).
+    const payload = buildValidPayload({ submittedAt: '2026-08-06T11:00:00.000Z', completedAt: '2026-08-06T11:01:00.000Z' });
+    delete payload.serviceTypeId;
+
+    const res = await submitFeedbackV1(deviceAuthHeader(deviceSecret), payload);
     expect(res.status).toBe(201);
     expect(res.body.data.feedbackSession.personnelId).toBeNull();
     expect(res.body.data.feedbackSession.serviceSessionId).toBeNull();

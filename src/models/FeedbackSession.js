@@ -33,6 +33,24 @@ export const FEEDBACK_SESSION_STATUSES = ['completed'];
  * time and never re-derived from the tablet's current state afterward —
  * a later Personnel/Tablet reassignment must never change what an
  * already-submitted FeedbackSession attributes.
+ *
+ * V2.6 — `serviceTypeId` is the same kind of optional, additive,
+ * submission-time snapshot (backend/docs/v2/V2_6_SERVICE_TYPES.md),
+ * except its origin differs from personnelId/serviceSessionId/buildingId:
+ * those are always resolved server-side from the tablet's active
+ * ServiceSession and never accepted from the client payload, whereas
+ * serviceTypeId genuinely IS a client (respondent/kiosk) selection — the
+ * server has no way to infer which transaction type a respondent is
+ * rating. The anti-spoofing guarantee here is therefore not "never
+ * accept from the client" but "always independently verify": every
+ * serviceTypeId is checked by serviceTypeService.assertServiceTypeIsUsable
+ * against the submitting tablet's own departmentId before being stored,
+ * so a Library tablet can never attribute feedback to a Registrar
+ * service type. Only ever set via POST /api/v2/mobile/feedback — v1
+ * submissions have no such field in their request contract at all (see
+ * validateMobile.js's v1-only FEEDBACK_FIELDS) and always get `null`
+ * here. A later ServiceType rename/deactivation must never change what
+ * an already-submitted FeedbackSession snapshotted.
  */
 const feedbackSessionSchema = new mongoose.Schema(
   {
@@ -96,6 +114,11 @@ const feedbackSessionSchema = new mongoose.Schema(
       ref: 'Building',
       default: null,
     },
+    serviceTypeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ServiceType',
+      default: null,
+    },
   },
   { timestamps: true },
 );
@@ -106,6 +129,7 @@ feedbackSessionSchema.index({ locationId: 1 });
 feedbackSessionSchema.index({ tabletId: 1 });
 feedbackSessionSchema.index({ personnelId: 1, submittedAt: -1 });
 feedbackSessionSchema.index({ serviceSessionId: 1 });
+feedbackSessionSchema.index({ serviceTypeId: 1, submittedAt: -1 });
 
 const FeedbackSession = mongoose.model('FeedbackSession', feedbackSessionSchema);
 

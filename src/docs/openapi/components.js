@@ -221,6 +221,21 @@ export const schemas = {
     },
   },
 
+  ServiceType: {
+    type: 'object',
+    description: 'V2.6 — a configurable service/transaction category owned by exactly one Department. code/name are unique only within their owning department, not globally (e.g. "Clearance" may legitimately exist in both Registrar and Library).',
+    properties: {
+      _id: objectId,
+      departmentId: { ...objectId, description: 'Immutable after creation.' },
+      name: { type: 'string', example: 'Enrollment / Registration' },
+      code: { type: 'string', example: 'REG-SVC-01' },
+      description: { type: 'string', example: '' },
+      isActive: { type: 'boolean', example: true },
+      sortOrder: { type: 'integer', example: 1 },
+      ...timestamps,
+    },
+  },
+
   Personnel: {
     type: 'object',
     properties: {
@@ -374,6 +389,7 @@ export const schemas = {
         ],
       },
       buildingId: { ...objectId, nullable: true, description: 'V2.4 — snapshotted from the ServiceSession at submission time, not the tablet’s current Location.' },
+      serviceTypeId: { ...objectId, nullable: true, description: 'V2.6 — set only for feedback submitted via /api/v2/mobile/feedback, where it is required. Independently verified server-side to belong to the same department as the submitting tablet. null for every pre-V2.6 or v1-submitted session.' },
       ...timestamps,
     },
   },
@@ -654,6 +670,20 @@ export const schemas = {
           },
         },
       },
+      feedbackByServiceType: {
+        type: 'array',
+        description: 'V2.6 — volume + average rating per Service Type. Empty for any scope with no serviceTypeId-attributed feedback (e.g. legacy data, or every v1-only submission).',
+        items: {
+          type: 'object',
+          properties: {
+            serviceTypeId: objectId,
+            serviceTypeName: { type: 'string' },
+            departmentId: objectId,
+            count: { type: 'integer' },
+            averageRating: { type: 'number', nullable: true },
+          },
+        },
+      },
       surveyPerformance: {
         type: 'array',
         items: {
@@ -700,6 +730,22 @@ export const schemas = {
               properties: {
                 departmentId: objectId,
                 departmentName: { type: 'string', example: 'Registrar' },
+                courtesy: { type: 'number', nullable: true },
+                clarity: { type: 'number', nullable: true },
+                waitingTime: { type: 'number', nullable: true },
+                overall: { type: 'number', nullable: true },
+              },
+            },
+          },
+          byServiceType: {
+            type: 'array',
+            description: 'V2.6 — the same Category breakdown, grouped by Service Type instead of Department. A rating answer whose session has no serviceTypeId is never grouped here.',
+            items: {
+              type: 'object',
+              properties: {
+                serviceTypeId: objectId,
+                serviceTypeName: { type: 'string', example: 'Enrollment / Registration' },
+                departmentId: objectId,
                 courtesy: { type: 'number', nullable: true },
                 clarity: { type: 'number', nullable: true },
                 waitingTime: { type: 'number', nullable: true },

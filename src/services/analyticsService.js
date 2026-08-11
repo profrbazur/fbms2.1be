@@ -4,6 +4,7 @@ import FeedbackAnswer from '../models/FeedbackAnswer.js';
 import Department from '../models/Department.js';
 import Survey from '../models/Survey.js';
 import Location from '../models/Location.js';
+import ServiceType from '../models/ServiceType.js';
 import { SERVICE_QUALITY_CATEGORIES } from '../models/Question.js';
 import { ApiError } from '../utils/ApiError.js';
 import { isValidObjectId } from '../utils/isValidObjectId.js';
@@ -187,7 +188,16 @@ export async function getRatingAveragesByField(filter, sessionField) {
     { $group: { _id: `$${sessionField}`, averageRating: { $avg: '$answer' } } },
   ]);
 
-  return new Map(rows.map((row) => [row._id.toString(), Math.round(row.averageRating * 100) / 100]));
+  // V2.6 — `sessionField` is not always a required field (e.g.
+  // `session.serviceTypeId` is nullable); a `_id: null` group represents
+  // every session with no value for that field at all, which is never a
+  // meaningful lookup key here (every caller only ever looks up a real
+  // id) and must be excluded rather than crash on `null.toString()`.
+  return new Map(
+    rows
+      .filter((row) => row._id !== null)
+      .map((row) => [row._id.toString(), Math.round(row.averageRating * 100) / 100]),
+  );
 }
 
 /**
@@ -644,4 +654,107 @@ export async function getServiceQualityByDepartment(filter) {
       overall: computeOverallServiceQuality(categories),
     }))
     .sort((a, b) => a.departmentName.localeCompare(b.departmentName));
+}
+
+/**
+ * V2.6 — feedback volume grouped by Service Type (backend/docs/v2/
+ * V2_6_SERVICE_TYPES.md's "volume by service type" analytics
+ * requirement). Only sessions that actually carry a serviceTypeId
+ * snapshot are counted — a session with `serviceTypeId: null` (every
+ * pre-V2.6 session, and every v1-submitted session) simply doesn't
+ * contribute a row, matching getFeedbackByDepartment's own "no rows, not
+ * zero-filled rows" convention. `Math.round` matches this file's other
+ * averaging functions.
+ */
+export async function getFeedbackByServiceType(filter) {
+  if (filter === null) return [];
+
+  const rows = await FeedbackSession.aggregate([
+    { $match: { ...filter, serviceTypeId: { $ne: null } } },
+    { $group: { _id: '$serviceTypeId', count: { $sum: 1 } } },
+  ]);
+
+  if (rows.length === 0) return [];
+
+  const serviceTypes = await ServiceType.find({ _id: { $in: rows.map((row) => row._id) } }).select(
+    '_id name departmentId',
+  );
+  const serviceTypeById = new Map(serviceTypes.map((serviceType) => [serviceType._id.toString(), serviceType]));
+
+  return rows
+    .map((row) => {
+      const serviceType = serviceTypeById.get(row._id.toString());
+      return {
+        serviceTypeId: row._id,
+        serviceTypeName: serviceType?.name ?? 'Unknown Service Type',
+        departmentId: serviceType?.departmentId ?? null,
+        count: row.count,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * V2.6 — Service Type × Service Quality Category, the same shape as
+ * `getServiceQualityByDepartment` above but grouped by
+ * `session.serviceTypeId` instead of `session.departmentId` (backend/docs/v2/
+ * V2_6_SERVICE_TYPES.md's "quality dimensions by service type" and
+ * V2_6_SERVICE_TYPES_UI.md's "Courtesy/Clarity/Waiting Time by Service
+ * Type" requirements). A rating answer whose session has no
+ * serviceTypeId simply isn't grouped here — legacy/unattributed data
+ * never appears as a misleading "Unknown Service Type" row.
+ */
+export async function getServiceQualityByServiceType(filter) {
+  if (filter === null) return [];
+
+  const sessionMatch = Object.fromEntries(Object.entries(filter).map(([field, value]) => [`session.${field}`, value]));
+
+  const rows = await FeedbackAnswer.aggregate([
+    { $match: { questionType: 'rating', serviceQualityCategory: { $in: SERVICE_QUALITY_CATEGORIES } } },
+    {
+      $lookup: {
+        from: 'feedbacksessions',
+        localField: 'feedbackSessionId',
+        foreignField: '_id',
+        as: 'session',
+      },
+    },
+    { $unwind: '$session' },
+    { $match: { 'session.serviceTypeId': { $ne: null } } },
+    ...(Object.keys(sessionMatch).length > 0 ? [{ $match: sessionMatch }] : []),
+    {
+      $group: {
+        _id: { serviceTypeId: '$session.serviceTypeId', category: '$serviceQualityCategory' },
+        averageRating: { $avg: '$answer' },
+      },
+    },
+  ]);
+
+  if (rows.length === 0) return [];
+
+  const serviceTypeIds = [...new Set(rows.map((row) => row._id.serviceTypeId.toString()))];
+  const serviceTypes = await ServiceType.find({ _id: { $in: serviceTypeIds } }).select('_id name departmentId');
+  const serviceTypeById = new Map(serviceTypes.map((serviceType) => [serviceType._id.toString(), serviceType]));
+
+  const byServiceType = new Map();
+  rows.forEach((row) => {
+    const serviceTypeId = row._id.serviceTypeId.toString();
+    if (!byServiceType.has(serviceTypeId)) {
+      byServiceType.set(serviceTypeId, emptyServiceQuality());
+    }
+    byServiceType.get(serviceTypeId)[row._id.category] = Math.round(row.averageRating * 100) / 100;
+  });
+
+  return [...byServiceType.entries()]
+    .map(([serviceTypeId, categories]) => {
+      const serviceType = serviceTypeById.get(serviceTypeId);
+      return {
+        serviceTypeId,
+        serviceTypeName: serviceType?.name ?? 'Unknown Service Type',
+        departmentId: serviceType?.departmentId ?? null,
+        ...categories,
+        overall: computeOverallServiceQuality(categories),
+      };
+    })
+    .sort((a, b) => a.serviceTypeName.localeCompare(b.serviceTypeName));
 }

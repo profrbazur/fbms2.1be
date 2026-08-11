@@ -17,8 +17,10 @@ import {
   getFeedbackByDepartment,
   getFeedbackBySurvey,
   getFeedbackByLocation,
+  getFeedbackByServiceType,
   getServiceQualityAverages,
   getServiceQualityByDepartment,
+  getServiceQualityByServiceType,
 } from './analyticsService.js';
 
 /**
@@ -35,6 +37,17 @@ function serviceQualityByDepartmentToApi(rows) {
   return rows.map(({ departmentId, departmentName, ...categories }) => ({
     departmentId,
     departmentName,
+    ...toApiServiceQuality(categories),
+  }));
+}
+
+// V2.6 — same category boundary conversion as serviceQualityByDepartmentToApi,
+// applied to the Service Type × Category breakdown instead.
+function serviceQualityByServiceTypeToApi(rows) {
+  return rows.map(({ serviceTypeId, serviceTypeName, departmentId, ...categories }) => ({
+    serviceTypeId,
+    serviceTypeName,
+    departmentId,
     ...toApiServiceQuality(categories),
   }));
 }
@@ -69,9 +82,17 @@ function emptyFeedbackSummaryReport(filters) {
     feedbackByDepartment: [],
     feedbackBySurvey: [],
     feedbackByLocation: [],
+    feedbackByServiceType: [],
     surveyPerformance: [],
     tabletContribution: [],
-    serviceQuality: { courtesy: null, clarity: null, waitingTime: null, overall: null, byDepartment: [] },
+    serviceQuality: {
+      courtesy: null,
+      clarity: null,
+      waitingTime: null,
+      overall: null,
+      byDepartment: [],
+      byServiceType: [],
+    },
   };
 }
 
@@ -276,12 +297,15 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     feedbackByDepartmentBase,
     feedbackBySurveyBase,
     feedbackByLocationBase,
+    feedbackByServiceTypeBase,
     ratingByDepartment,
     ratingBySurvey,
     ratingByLocation,
+    ratingByServiceType,
     surveys,
     serviceQualityAverages,
     serviceQualityByDepartmentBase,
+    serviceQualityByServiceTypeBase,
   ] = await Promise.all([
     FeedbackSession.countDocuments(filter),
     getAverageRating(filter),
@@ -306,12 +330,15 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     getFeedbackByDepartment(filter),
     getFeedbackBySurvey(filter),
     getFeedbackByLocation(filter),
+    getFeedbackByServiceType(filter),
     getRatingAveragesByField(filter, 'session.departmentId'),
     getRatingAveragesByField(filter, 'session.surveyId'),
     getRatingAveragesByField(filter, 'session.locationId'),
+    getRatingAveragesByField(filter, 'session.serviceTypeId'),
     listVisibleSurveysForReport(user, { departmentId, surveyId }),
     getServiceQualityAverages(filter),
     getServiceQualityByDepartment(filter),
+    getServiceQualityByServiceType(filter),
   ]);
 
   const tabletExtraMatch = {};
@@ -323,6 +350,7 @@ export async function getFeedbackSummaryReport(user, query = {}) {
   const feedbackByDepartment = withAverageRating(feedbackByDepartmentBase, 'departmentId', ratingByDepartment);
   const feedbackBySurvey = withAverageRating(feedbackBySurveyBase, 'surveyId', ratingBySurvey);
   const feedbackByLocation = withAverageRating(feedbackByLocationBase, 'locationId', ratingByLocation);
+  const feedbackByServiceType = withAverageRating(feedbackByServiceTypeBase, 'serviceTypeId', ratingByServiceType);
 
   return {
     filters: resolvedFilters,
@@ -341,6 +369,12 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     feedbackByDepartment,
     feedbackBySurvey,
     feedbackByLocation,
+    // V2.6 — volume + average rating per Service Type (backend/docs/v2/
+    // V2_6_SERVICE_TYPES.md's "volume by service type" requirement).
+    // Empty for any scope with no serviceTypeId-attributed feedback yet
+    // (e.g. before this phase's data existed), same "no rows" convention
+    // as feedbackByDepartment.
+    feedbackByServiceType,
     surveyPerformance: buildSurveyPerformance(surveys, feedbackBySurveyBase, ratingBySurvey),
     tabletContribution,
     // V2.5 — Courtesy/Clarity/Waiting Time/Overall, scoped identically to
@@ -350,10 +384,13 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     // comparison, same "a scoped caller's response is always a single
     // trivial row" reasoning as feedbackByDepartment (the frontend hides
     // this table for Department Head/Personnel, mirroring that table's
-    // own established convention).
+    // own established convention). `byServiceType` (V2.6) is the same
+    // idea, one row per Service Type that has at least one categorized
+    // rating answer.
     serviceQuality: {
       ...toApiServiceQuality(serviceQualityAverages),
       byDepartment: serviceQualityByDepartmentToApi(serviceQualityByDepartmentBase),
+      byServiceType: serviceQualityByServiceTypeToApi(serviceQualityByServiceTypeBase),
     },
   };
 }
