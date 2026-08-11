@@ -26,6 +26,7 @@ const FALLBACK_DEFAULTS = {
   timezone: 'Asia/Manila',
   dateFormat: 'YYYY-MM-DD',
   timeFormat: '12h',
+  defaultSatisfactionTarget: 4,
 };
 
 const LOGO_UPLOAD_URL_PREFIX = '/uploads/logos/';

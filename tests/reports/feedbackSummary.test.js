@@ -554,6 +554,80 @@ describe('GET /api/v1/reports/feedback-summary', () => {
     });
   });
 
+  describe('satisfaction KPI (V2.8)', () => {
+    it('defaults to the organization target (4) system-wide, with the same actual as summary.averageRating', async () => {
+      const res = await getReport(roles.superAdmin.token);
+      const { satisfactionKpi, summary } = res.body.data;
+
+      expect(satisfactionKpi.target).toBe(4);
+      expect(satisfactionKpi.actual).toBeCloseTo(summary.averageRating, 2);
+      expect(satisfactionKpi.actual).toBeCloseTo(110 / 28, 2);
+      expect(satisfactionKpi.variance).toBeCloseTo(110 / 28 - 4, 2);
+      expect(satisfactionKpi.status).toBe('below_target');
+    });
+
+    it('Registrar Department Head sees Registrar-scoped actual against the organization default target', async () => {
+      const res = await getReport(roles.registrarHead.token);
+      const { satisfactionKpi } = res.body.data;
+
+      expect(satisfactionKpi.target).toBe(4);
+      expect(satisfactionKpi.actual).toBeCloseTo(78 / 20, 2); // 3.9
+      expect(satisfactionKpi.variance).toBeCloseTo(78 / 20 - 4, 2);
+      expect(satisfactionKpi.status).toBe('below_target');
+    });
+
+    it('Library Personnel is exactly on target (actual 4.0 == default target 4)', async () => {
+      const res = await getReport(roles.libraryStaff.token);
+      const { satisfactionKpi } = res.body.data;
+
+      expect(satisfactionKpi.target).toBe(4);
+      expect(satisfactionKpi.actual).toBeCloseTo(4, 2);
+      expect(satisfactionKpi.variance).toBe(0);
+      expect(satisfactionKpi.status).toBe('on_target');
+    });
+
+    it('a Department satisfactionTarget override takes precedence over the organization default', async () => {
+      await Department.findByIdAndUpdate(registrarDept._id, { satisfactionTarget: 3.5 });
+
+      const res = await getReport(roles.registrarHead.token);
+      const { satisfactionKpi } = res.body.data;
+
+      expect(satisfactionKpi.target).toBe(3.5);
+      expect(satisfactionKpi.actual).toBeCloseTo(78 / 20, 2);
+      expect(satisfactionKpi.variance).toBeCloseTo(78 / 20 - 3.5, 2);
+      expect(satisfactionKpi.status).toBe('above_target');
+
+      await Department.findByIdAndUpdate(registrarDept._id, { satisfactionTarget: null });
+    });
+
+    it('a client-supplied departmentId cannot borrow another department\'s target override for a scoped role', async () => {
+      await Department.findByIdAndUpdate(libraryDept._id, { satisfactionTarget: 1 });
+
+      const res = await getReport(roles.registrarHead.token, `?departmentId=${libraryDept._id.toString()}`);
+      // Still pinned to Registrar server-side — never widens to Library's
+      // department, so it never picks up Library's target override either.
+      expect(res.body.data.satisfactionKpi.target).toBe(4);
+
+      await Department.findByIdAndUpdate(libraryDept._id, { satisfactionTarget: null });
+    });
+
+    it('resolves the target even with zero eligible responses in scope, with actual null and status no_data', async () => {
+      const res = await getReport(roles.superAdmin.token, '?dateFrom=2020-01-01&dateTo=2020-01-02');
+      const { satisfactionKpi } = res.body.data;
+
+      expect(satisfactionKpi.target).toBe(4);
+      expect(satisfactionKpi.actual).toBeNull();
+      expect(satisfactionKpi.variance).toBeNull();
+      expect(satisfactionKpi.status).toBe('no_data');
+      expect(satisfactionKpi.trend).toEqual({ direction: null, previousActual: null });
+    });
+
+    it('trend has no direction for an explicit custom date range (no well-defined "period before it")', async () => {
+      const res = await getReport(roles.superAdmin.token, '?dateFrom=2026-07-20&dateTo=2026-07-24');
+      expect(res.body.data.satisfactionKpi.trend.direction).toBeNull();
+    });
+  });
+
   describe('filters echo', () => {
     it('echoes the resolved filters actually applied', async () => {
       const res = await getReport(

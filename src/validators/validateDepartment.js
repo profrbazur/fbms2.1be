@@ -1,7 +1,7 @@
 import { ApiError } from '../utils/ApiError.js';
 import { CODE_PATTERN } from '../utils/validationPatterns.js';
 
-const ALLOWED_FIELDS = ['name', 'code', 'description', 'isActive'];
+const ALLOWED_FIELDS = ['name', 'code', 'description', 'isActive', 'satisfactionTarget'];
 
 function validateFieldTypes(body, errors) {
   if ('name' in body && (typeof body.name !== 'string' || !body.name.trim())) {
@@ -25,6 +25,19 @@ function validateFieldTypes(body, errors) {
 
   if ('isActive' in body && typeof body.isActive !== 'boolean') {
     errors.push({ field: 'isActive', message: 'isActive must be a boolean.' });
+  }
+
+  // V2.8 — optional per-department Satisfaction KPI target override.
+  // `null` clears the override (falls back to the organization default);
+  // any other non-1-5 value is rejected.
+  if ('satisfactionTarget' in body) {
+    const value = body.satisfactionTarget;
+    if (value !== null && (typeof value !== 'number' || !Number.isFinite(value) || value < 1 || value > 5)) {
+      errors.push({
+        field: 'satisfactionTarget',
+        message: 'satisfactionTarget must be a number between 1 and 5, or null to clear the override.',
+      });
+    }
   }
 }
 

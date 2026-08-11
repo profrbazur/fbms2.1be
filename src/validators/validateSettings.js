@@ -36,6 +36,8 @@ const ALLOWED_FIELDS = [
   'timezone',
   'dateFormat',
   'timeFormat',
+  // V2.8 — Satisfaction KPI Targets (backend/docs/v2/V2_8_KPI_TARGETS.md)
+  'defaultSatisfactionTarget',
 ];
 
 const REQUIRED_STRING_FIELDS = [
@@ -128,6 +130,8 @@ export function validateSettings(req, res, next) {
       message: `defaultTrendWindowDays must be one of: ${VALID_TREND_DAYS.join(', ')}.`,
     });
   }
+
+  validateRequiredNumber(body, errors, 'defaultSatisfactionTarget', { min: 1, max: 5 });
 
   if (Object.keys(body).length === 0) {
     errors.push({ field: 'body', message: 'At least one field is required.' });

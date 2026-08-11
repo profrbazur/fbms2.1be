@@ -28,6 +28,11 @@ const DEFAULT_SETTINGS = {
   timezone: 'Asia/Manila',
   dateFormat: 'YYYY-MM-DD',
   timeFormat: '12h',
+  // V2.8 — matches OrganizationSettings' own schema default; listed
+  // explicitly here for the same reason every other field is (re-running
+  // this seeder never resets an admin's already-configured value, per
+  // $setOnInsert).
+  defaultSatisfactionTarget: 4,
 };
 
 /**

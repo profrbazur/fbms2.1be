@@ -923,3 +923,111 @@ export async function getFeedbackByServiceTypeAndRespondentType(filter) {
     })
     .sort((a, b) => b.count - a.count);
 }
+
+/**
+ * V2.8 — Satisfaction KPI Targets (backend/docs/v2/V2_8_KPI_TARGETS.md).
+ * Resolution order: the given department's own `satisfactionTarget`
+ * override if one is configured, otherwise
+ * `OrganizationSettings.defaultSatisfactionTarget` — the exact same
+ * "Department overrides Organization default" fallback shape
+ * `getDefaultTrendWindowDays` already established for
+ * `defaultTrendWindowDays` (P8.0). `departmentId` is `undefined`/`null`
+ * whenever the caller's scope isn't pinned to exactly one department (a
+ * global-read role viewing system-wide data) — there is no single
+ * department to look up an override for, so the organization default is
+ * used, matching this doc's own worked example.
+ */
+async function resolveSatisfactionTarget(departmentId) {
+  if (departmentId) {
+    const department = await Department.findById(departmentId).select('satisfactionTarget');
+    if (department && department.satisfactionTarget !== null && department.satisfactionTarget !== undefined) {
+      return department.satisfactionTarget;
+    }
+  }
+
+  const settings = await getOrganizationSettings();
+  return settings.defaultSatisfactionTarget;
+}
+
+/**
+ * V2.8 — "trend" half of the Satisfaction KPI: compares the average
+ * rating (same population `getAverageRating` uses) over the current
+ * 7/30-day rolling window against the immediately preceding window of
+ * equal length, reusing `resolveRollingWindowDates`/
+ * `getDefaultTrendWindowDays` exactly as `getFeedbackTrend` does. Returns
+ * `direction: null` (not a guess) whenever a trend can't be meaningfully
+ * computed: no scope, an explicit custom date range already selected
+ * (comparing an arbitrary caller-chosen range against "the period before
+ * it" has no well-defined length), or either window has zero rating
+ * answers. `previousActual` is still returned in that last case so the
+ * frontend can distinguish "no prior data" from "no trend requested."
+ */
+async function getSatisfactionTrend(filter, { days, dateFrom, dateTo } = {}) {
+  if (filter === null) return { direction: null, previousActual: null };
+  if (dateFrom && dateTo) return { direction: null, previousActual: null };
+
+  const trendDays = VALID_TREND_DAYS.includes(days) ? days : await getDefaultTrendWindowDays();
+  const { startDate: currentStart, endDate: currentEnd } = await resolveRollingWindowDates(trendDays);
+
+  const previousEnd = new Date(currentStart);
+  previousEnd.setUTCDate(previousEnd.getUTCDate() - 1);
+  const previousStart = new Date(previousEnd);
+  previousStart.setUTCDate(previousStart.getUTCDate() - (trendDays - 1));
+
+  const currentEndExclusive = new Date(currentEnd);
+  currentEndExclusive.setUTCDate(currentEndExclusive.getUTCDate() + 1);
+  const previousEndExclusive = new Date(previousEnd);
+  previousEndExclusive.setUTCDate(previousEndExclusive.getUTCDate() + 1);
+
+  const [currentActual, previousActual] = await Promise.all([
+    getAverageRating({ ...filter, submittedAt: { $gte: currentStart, $lt: currentEndExclusive } }),
+    getAverageRating({ ...filter, submittedAt: { $gte: previousStart, $lt: previousEndExclusive } }),
+  ]);
+
+  if (currentActual === null || previousActual === null) {
+    return { direction: null, previousActual };
+  }
+
+  const delta = Math.round((currentActual - previousActual) * 100) / 100;
+  const direction = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
+
+  return { direction, previousActual };
+}
+
+/**
+ * V2.8 — the single Satisfaction KPI computation Reports/Dashboard both
+ * call. `actual` is deliberately the exact same overall average rating
+ * already shown as `summary.averageRating`/Dashboard's Average Rating
+ * card (`getAverageRating(filter)`) — see backend/docs/v2/
+ * V2_8_KPI_TARGETS.md's own worked example (Actual: 4.34), which reads as
+ * a plain average-rating figure, not a percentage or the V2.5 Service
+ * Quality composite (a narrower, dimension-only figure that silently
+ * excludes any session/survey not using Courtesy/Clarity/Waiting Time).
+ * `target` always resolves (Department override or Organization default,
+ * never null — see `resolveSatisfactionTarget`), even with zero rating
+ * data in scope, so an admin can see what target is configured before any
+ * feedback exists. `status` is `'no_data'` only when `actual` itself is
+ * null; otherwise a plain three-way split on the sign of `variance` — no
+ * tolerance band or invented threshold, per this phase's "no arbitrary
+ * formulas" instruction.
+ */
+export async function getSatisfactionKpi(filter, { departmentId, days, dateFrom, dateTo } = {}) {
+  if (filter === null) {
+    return { target: null, actual: null, variance: null, status: 'no_data', trend: { direction: null, previousActual: null } };
+  }
+
+  const [actual, target, trend] = await Promise.all([
+    getAverageRating(filter),
+    resolveSatisfactionTarget(departmentId),
+    getSatisfactionTrend(filter, { days, dateFrom, dateTo }),
+  ]);
+
+  if (actual === null) {
+    return { target, actual: null, variance: null, status: 'no_data', trend };
+  }
+
+  const variance = Math.round((actual - target) * 100) / 100;
+  const status = variance > 0 ? 'above_target' : variance < 0 ? 'below_target' : 'on_target';
+
+  return { target, actual, variance, status, trend };
+}

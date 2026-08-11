@@ -24,6 +24,7 @@ import {
   getServiceQualityByDepartment,
   getServiceQualityByServiceType,
   getServiceQualityByRespondentType,
+  getSatisfactionKpi,
 } from './analyticsService.js';
 
 /**
@@ -108,6 +109,13 @@ function emptyFeedbackSummaryReport(filters) {
       byDepartment: [],
       byServiceType: [],
       byRespondentType: [],
+    },
+    satisfactionKpi: {
+      target: null,
+      actual: null,
+      variance: null,
+      status: 'no_data',
+      trend: { direction: null, previousActual: null },
     },
   };
 }
@@ -326,6 +334,7 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     serviceQualityByDepartmentBase,
     serviceQualityByServiceTypeBase,
     serviceQualityByRespondentTypeBase,
+    satisfactionKpi,
   ] = await Promise.all([
     FeedbackSession.countDocuments(filter),
     getAverageRating(filter),
@@ -363,6 +372,13 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     getServiceQualityByDepartment(filter),
     getServiceQualityByServiceType(filter),
     getServiceQualityByRespondentType(filter),
+    // V2.8 — departmentId is `filter.departmentId` (already resolved/
+    // cast by buildReportFilter above), not the raw query param: present
+    // only when this response is actually pinned to one department
+    // (Department Head/Personnel, or a Super Admin/Senior Leadership
+    // narrowing query), so a system-wide view always falls back to the
+    // organization default target rather than an arbitrary department's.
+    getSatisfactionKpi(filter, { departmentId: filter.departmentId, days: trendDaysNum, dateFrom, dateTo }),
   ]);
 
   const tabletExtraMatch = {};
@@ -430,5 +446,13 @@ export async function getFeedbackSummaryReport(user, query = {}) {
       byServiceType: serviceQualityByServiceTypeToApi(serviceQualityByServiceTypeBase),
       byRespondentType: serviceQualityByRespondentTypeToApi(serviceQualityByRespondentTypeBase),
     },
+    // V2.8 — Satisfaction KPI Targets (backend/docs/v2/
+    // V2_8_KPI_TARGETS.md). `actual` is the same overall average rating
+    // as `summary.averageRating`, scoped/filtered identically; `target`
+    // resolves Department override -> Organization default; `trend`
+    // compares the current 7/30-day rolling window against the one
+    // before it (`null` direction whenever an explicit custom date range
+    // is selected — see getSatisfactionTrend).
+    satisfactionKpi,
   };
 }

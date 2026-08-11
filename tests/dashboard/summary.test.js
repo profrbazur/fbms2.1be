@@ -334,6 +334,46 @@ describe('GET /api/v1/dashboard/summary', () => {
     });
   });
 
+  describe('satisfaction KPI (V2.8)', () => {
+    it('defaults to the organization target (4) system-wide, with the same actual as cards.averageRating', async () => {
+      const res = await getSummary(roles.superAdmin.token);
+      const { satisfactionKpi, cards } = res.body.data;
+
+      expect(satisfactionKpi.target).toBe(4);
+      expect(satisfactionKpi.actual).toBeCloseTo(cards.averageRating, 2);
+      expect(satisfactionKpi.actual).toBeCloseTo(110 / 28, 2);
+      expect(satisfactionKpi.status).toBe('below_target');
+    });
+
+    it('Registrar Department Head sees Registrar-scoped actual against the organization default target', async () => {
+      const res = await getSummary(roles.registrarHead.token);
+      const { satisfactionKpi } = res.body.data;
+
+      expect(satisfactionKpi.target).toBe(4);
+      expect(satisfactionKpi.actual).toBeCloseTo(78 / 20, 2);
+      expect(satisfactionKpi.status).toBe('below_target');
+    });
+
+    it('Library Personnel is exactly on target (actual 4.0 == default target 4)', async () => {
+      const res = await getSummary(roles.libraryStaff.token);
+      const { satisfactionKpi } = res.body.data;
+
+      expect(satisfactionKpi.actual).toBeCloseTo(4, 2);
+      expect(satisfactionKpi.variance).toBe(0);
+      expect(satisfactionKpi.status).toBe('on_target');
+    });
+
+    it('a Department satisfactionTarget override is picked up for a department-pinned scope', async () => {
+      await Department.findByIdAndUpdate(registrarDept._id, { satisfactionTarget: 3.5 });
+
+      const res = await getSummary(roles.registrarHead.token);
+      expect(res.body.data.satisfactionKpi.target).toBe(3.5);
+      expect(res.body.data.satisfactionKpi.status).toBe('above_target');
+
+      await Department.findByIdAndUpdate(registrarDept._id, { satisfactionTarget: null });
+    });
+  });
+
   describe('recent activity', () => {
     it('returns at most 5 sessions, most recent first, with no edit-related fields', async () => {
       const res = await getSummary(roles.superAdmin.token);

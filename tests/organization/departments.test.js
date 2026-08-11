@@ -182,6 +182,32 @@ describe('POST /api/v1/departments', () => {
     const res = await createDepartment(undefined, { name: 'X', code: 'X1' });
     expect(res.status).toBe(401);
   });
+
+  it('accepts an optional satisfactionTarget override (V2.8), null by default when omitted', async () => {
+    const withoutOverride = await createDepartment(roles.superAdmin.token, {
+      name: 'No Override Office',
+      code: 'NOOV',
+    });
+    expect(withoutOverride.body.data.department.satisfactionTarget).toBeNull();
+
+    const withOverride = await createDepartment(roles.superAdmin.token, {
+      name: 'Override Office',
+      code: 'OVER',
+      satisfactionTarget: 4.5,
+    });
+    expect(withOverride.status).toBe(201);
+    expect(withOverride.body.data.department.satisfactionTarget).toBe(4.5);
+  });
+
+  it('rejects a satisfactionTarget outside [1, 5]', async () => {
+    const res = await createDepartment(roles.superAdmin.token, {
+      name: 'Bad Target Office',
+      code: 'BADT',
+      satisfactionTarget: 5.5,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'satisfactionTarget')).toBe(true);
+  });
 });
 
 describe('PATCH /api/v1/departments/:id', () => {
@@ -248,5 +274,27 @@ describe('PATCH /api/v1/departments/:id', () => {
   it('never returns passwordHash or unrelated sensitive user data', async () => {
     const res = await listDepartments(roles.superAdmin.token);
     expect(JSON.stringify(res.body)).not.toMatch(/passwordHash/i);
+  });
+
+  it('allows Super Admin to set and clear a satisfactionTarget override (V2.8)', async () => {
+    const setRes = await patchDepartment(roles.superAdmin.token, registrarDept._id.toString(), {
+      satisfactionTarget: 3.8,
+    });
+    expect(setRes.status).toBe(200);
+    expect(setRes.body.data.department.satisfactionTarget).toBe(3.8);
+
+    const clearRes = await patchDepartment(roles.superAdmin.token, registrarDept._id.toString(), {
+      satisfactionTarget: null,
+    });
+    expect(clearRes.status).toBe(200);
+    expect(clearRes.body.data.department.satisfactionTarget).toBeNull();
+  });
+
+  it('rejects a satisfactionTarget outside [1, 5]', async () => {
+    const res = await patchDepartment(roles.superAdmin.token, registrarDept._id.toString(), {
+      satisfactionTarget: 0,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.errors.some((e) => e.field === 'satisfactionTarget')).toBe(true);
   });
 });

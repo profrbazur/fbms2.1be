@@ -77,6 +77,7 @@ describe('GET /api/v1/settings', () => {
       timezone: 'Asia/Manila',
       dateFormat: 'YYYY-MM-DD',
       timeFormat: '12h',
+      defaultSatisfactionTarget: 4,
     });
   });
 });
@@ -246,6 +247,26 @@ describe('PATCH /api/v1/settings', () => {
 
     const badTime = await patchSettings(roles.superAdmin.token, { timeFormat: '25h' });
     expect(badTime.status).toBe(400);
+  });
+
+  describe('defaultSatisfactionTarget (V2.8)', () => {
+    it('allows Super Admin to update it within the 1-5 rating scale', async () => {
+      const res = await patchSettings(roles.superAdmin.token, { defaultSatisfactionTarget: 4.2 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.settings.defaultSatisfactionTarget).toBe(4.2);
+
+      await patchSettings(roles.superAdmin.token, { defaultSatisfactionTarget: 4 });
+    });
+
+    it('rejects a value outside [1, 5]', async () => {
+      const tooLow = await patchSettings(roles.superAdmin.token, { defaultSatisfactionTarget: 0.5 });
+      expect(tooLow.status).toBe(400);
+      expect(tooLow.body.errors.some((e) => e.field === 'defaultSatisfactionTarget')).toBe(true);
+
+      const tooHigh = await patchSettings(roles.superAdmin.token, { defaultSatisfactionTarget: 5.5 });
+      expect(tooHigh.status).toBe(400);
+    });
   });
 });
 
