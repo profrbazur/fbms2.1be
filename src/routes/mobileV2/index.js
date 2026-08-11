@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticateDevice } from '../../middleware/authenticateDevice.js';
 import {
   validateHeartbeat,
-  validateFeedbackSubmission,
+  validateFeedbackSubmissionV2,
   validateSync,
   validateStaffLogin,
 } from '../../validators/validateMobile.js';
@@ -12,6 +12,7 @@ import {
   postStaffLogout,
   getStaffActive,
   postFeedbackV2,
+  getServiceTypesV2,
 } from '../../controllers/mobileControllerV2.js';
 
 /**
@@ -25,8 +26,8 @@ import {
  * activation itself. /heartbeat, /config, and /survey are unchanged from
  * v1 and reused directly (same controller functions, no duplicated
  * business logic) so a v2 kiosk client never needs to call back into v1
- * for anything. /staff/* and /feedback are the only genuinely new/changed
- * behavior this version introduces.
+ * for anything. /staff/*, /feedback, and /service-types (V2.6) are the
+ * only genuinely new/changed behavior this version introduces.
  */
 const router = Router();
 
@@ -41,6 +42,12 @@ router.post('/staff/login', validateStaffLogin, postStaffLogin);
 router.post('/staff/logout', postStaffLogout);
 router.get('/staff/active', getStaffActive);
 
-router.post('/feedback', validateFeedbackSubmission, postFeedbackV2);
+// V2.6 — lets the kiosk client populate a Service Type picker with
+// exactly the submitting tablet's own department's active options,
+// without ever touching the admin-only, role-scoped /api/v1/service-types
+// endpoint (see backend/docs/v2/V2_6_SERVICE_TYPES.md).
+router.get('/service-types', getServiceTypesV2);
+
+router.post('/feedback', validateFeedbackSubmissionV2, postFeedbackV2);
 
 export default router;

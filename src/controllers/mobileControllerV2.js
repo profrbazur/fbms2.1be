@@ -6,6 +6,7 @@ import {
   getActiveServiceSessionForTablet,
 } from '../services/serviceSessionService.js';
 import { submitFeedbackV2 } from '../services/feedbackService.js';
+import { listActiveServiceTypesForDepartment } from '../services/serviceTypeService.js';
 
 /**
  * V2.4 — POST /api/v2/mobile/staff/login. Never echoes the PIN back, and
@@ -50,6 +51,21 @@ export const getStaffActive = asyncHandler(async function getStaffActive(req, re
   return sendSuccess(res, {
     message: 'Active service session retrieved successfully.',
     data: { serviceSession: session },
+  });
+});
+
+/**
+ * V2.6 — GET /api/v2/mobile/service-types. Always scoped to
+ * `req.tablet.departmentId` and active-only; there is no query
+ * parameter to widen this (a device-authenticated request has no role
+ * to check against, unlike the admin-facing GET /api/v1/service-types).
+ */
+export const getServiceTypesV2 = asyncHandler(async function getServiceTypesV2(req, res) {
+  const serviceTypes = await listActiveServiceTypesForDepartment(req.tablet.departmentId);
+
+  return sendSuccess(res, {
+    message: 'Service types retrieved successfully.',
+    data: { serviceTypes },
   });
 });
 

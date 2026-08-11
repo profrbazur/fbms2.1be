@@ -6,6 +6,7 @@ import { organizationPaths } from '../../src/docs/openapi/paths/organization.js'
 import { departmentsPaths } from '../../src/docs/openapi/paths/departments.js';
 import { buildingsPaths } from '../../src/docs/openapi/paths/buildings.js';
 import { locationsPaths } from '../../src/docs/openapi/paths/locations.js';
+import { serviceTypesPaths } from '../../src/docs/openapi/paths/serviceTypes.js';
 import { personnelPaths } from '../../src/docs/openapi/paths/personnel.js';
 import { tabletsPaths } from '../../src/docs/openapi/paths/tablets.js';
 import { serviceSessionsPaths } from '../../src/docs/openapi/paths/serviceSessions.js';
@@ -27,6 +28,7 @@ const pathModules = [
   departmentsPaths,
   buildingsPaths,
   locationsPaths,
+  serviceTypesPaths,
   personnelPaths,
   tabletsPaths,
   serviceSessionsPaths,

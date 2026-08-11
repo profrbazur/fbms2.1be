@@ -5,6 +5,7 @@ import { seedOrganizationSettings, seedBuildings, seedLocations } from './organi
 import { seedPersonnel } from './personnelSeeder.js';
 import { seedTablets } from './tabletSeeder.js';
 import { seedServiceSessions } from './serviceSessionSeeder.js';
+import { seedServiceTypes } from './serviceTypeSeeder.js';
 import { seedSurveys } from './surveySeeder.js';
 import { seedFeedback } from './feedbackSeeder.js';
 
@@ -18,6 +19,7 @@ async function run() {
   const personnelResult = await seedPersonnel();
   const tabletResult = await seedTablets();
   const serviceSessionResult = await seedServiceSessions();
+  const serviceTypeResult = await seedServiceTypes();
   const surveyResult = await seedSurveys();
   const feedbackResult = await seedFeedback();
 
@@ -31,6 +33,7 @@ async function run() {
   console.log(`Seeded ${personnelResult.personnelCount} personnel record(s).`);
   console.log(`Seeded ${tabletResult.tabletCount} tablet(s).`);
   console.log(`Seeded ${serviceSessionResult.sessionCount} service session(s).`);
+  console.log(`Seeded ${serviceTypeResult.serviceTypeCount} service type(s).`);
   console.log(`Seeded ${surveyResult.surveyCount} survey(s) with ${surveyResult.questionCount} question(s).`);
   console.log(
     `Seeded ${feedbackResult.sessionCount} feedback session(s) with ${feedbackResult.answerCount} answer(s).`,

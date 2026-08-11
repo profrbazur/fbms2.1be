@@ -27,6 +27,7 @@ import { organizationPaths } from './paths/organization.js';
 import { departmentsPaths } from './paths/departments.js';
 import { buildingsPaths } from './paths/buildings.js';
 import { locationsPaths } from './paths/locations.js';
+import { serviceTypesPaths } from './paths/serviceTypes.js';
 import { personnelPaths } from './paths/personnel.js';
 import { tabletsPaths } from './paths/tablets.js';
 import { serviceSessionsPaths } from './paths/serviceSessions.js';
@@ -47,6 +48,7 @@ const tags = [
   { name: 'Departments', description: 'Departments master data.' },
   { name: 'Buildings', description: 'V2.3 — physical campus/building master data (docs/v2/V2_3_BUILDING_LOCATION.md).' },
   { name: 'Locations', description: 'Locations/service windows master data — each belongs to a Department and, as of V2.3, a Building.' },
+  { name: 'Service Types', description: 'V2.6 — configurable service/transaction categories owned by a Department, unique only within that department (docs/v2/V2_6_SERVICE_TYPES.md).' },
   { name: 'Personnel', description: 'Organizational personnel records (separate from User login accounts).' },
   { name: 'Tablets', description: 'Kiosk tablet registration and activation-token lifecycle.' },
   { name: 'Service Sessions', description: 'V2.4 — read-only view of Staff PIN service sessions (personnel currently/previously serving at a tablet). Mutated only via /api/v2/mobile/staff/*.' },
@@ -68,6 +70,7 @@ const paths = {
   ...departmentsPaths,
   ...buildingsPaths,
   ...locationsPaths,
+  ...serviceTypesPaths,
   ...personnelPaths,
   ...tabletsPaths,
   ...serviceSessionsPaths,

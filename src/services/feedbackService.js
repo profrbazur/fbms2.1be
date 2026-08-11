@@ -7,6 +7,7 @@ import { escapeRegExp } from '../utils/escapeRegExp.js';
 import { parsePositiveInt } from '../utils/parsePositiveInt.js';
 import { isGlobalReadRole } from '../utils/roleScope.js';
 import { resolveActiveSurveyForTablet } from './mobileService.js';
+import { assertServiceTypeIsUsable } from './serviceTypeService.js';
 
 function emptyPagination(limit) {
   const limitNum = Math.min(100, parsePositiveInt(limit, 20));
@@ -254,9 +255,18 @@ async function generateUniqueReferenceCode() {
  * requirement). `undefined` for the v1 caller, which never sets it —
  * v1-submitted sessions get `personnelId: null` from the schema default,
  * exactly like every pre-V2.4 session.
+ *
+ * `payload.serviceTypeId` (V2.6, optional) — unlike `attribution`, this
+ * one genuinely comes from the client (only ever present when
+ * validateFeedbackSubmissionV2 required it, i.e. v1 payloads never carry
+ * it), but is independently re-verified here via
+ * assertServiceTypeIsUsable(serviceTypeId, tablet.departmentId) before
+ * being trusted — it must exist, be active, and belong to the exact same
+ * department as the submitting tablet, so a client cannot attribute
+ * feedback to another department's service type.
  */
 async function createFeedbackSession(tablet, payload, attribution) {
-  const { surveyId, submittedAt, completedAt, answers } = payload;
+  const { surveyId, submittedAt, completedAt, answers, serviceTypeId } = payload;
 
   const activeSurvey = await resolveActiveSurveyForTablet(tablet);
 
@@ -323,6 +333,12 @@ async function createFeedbackSession(tablet, payload, attribution) {
     };
   });
 
+  let resolvedServiceTypeId = null;
+  if (serviceTypeId) {
+    const serviceType = await assertServiceTypeIsUsable(serviceTypeId, tablet.departmentId);
+    resolvedServiceTypeId = serviceType._id;
+  }
+
   const referenceCode = await generateUniqueReferenceCode();
   const durationSeconds = Math.max(
     0,
@@ -342,6 +358,7 @@ async function createFeedbackSession(tablet, payload, attribution) {
     serviceSessionId: attribution?.serviceSessionId ?? null,
     personnelId: attribution?.personnelId ?? null,
     buildingId: attribution?.buildingId ?? null,
+    serviceTypeId: resolvedServiceTypeId,
   });
 
   const createdAnswers = await FeedbackAnswer.insertMany(
