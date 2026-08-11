@@ -32,6 +32,16 @@ import { validateAnswerForQuestion } from '../services/feedbackService.js';
  * FB001-003 and FB006 deliberately have no serviceTypeCode at all —
  * legacy/unattributed feedback that must remain readable and must never
  * be misclassified into any service type.
+ *
+ * V2.7 — nine sessions (all but FB006) additionally carry a
+ * `respondentType` (student/employee/visitor — backend/docs/v2/
+ * V2_7_RESPONDENT_TYPE.md), distributed so every value appears at least
+ * twice (student: FB001/004/007/010, employee: FB002/005/009, visitor:
+ * FB003/008) and overlapping with `serviceTypeCode` on six sessions
+ * (FB004/005/007/008/009/010) so the Service Type × Respondent Type
+ * cross-tab has real data to show. FB006 deliberately has neither a
+ * serviceTypeCode nor a respondentType — fully legacy/unattributed
+ * feedback that must remain readable.
  */
 const FEEDBACK_SESSIONS = [
   {
@@ -46,6 +56,8 @@ const FEEDBACK_SESSIONS = [
     // purpose, to also exercise "existing feedback without ServiceSession
     // remains readable."
     attributedEmployeeNumber: 'REG-0002',
+    // V2.7 — see this file's own FEEDBACK_SESSIONS comment.
+    respondentType: 'student',
     answers: [
       { questionText: 'How would you rate your overall experience today?', answer: 5 },
       { questionText: 'Would you recommend our services to others?', answer: true },
@@ -62,6 +74,7 @@ const FEEDBACK_SESSIONS = [
     submittedAt: '2026-07-22T13:05:00.000Z',
     completedAt: '2026-07-22T13:06:30.000Z',
     attributedEmployeeNumber: 'REG-0003',
+    respondentType: 'employee',
     answers: [
       { questionText: 'How would you rate your overall experience today?', answer: 4 },
       { questionText: 'Would you recommend our services to others?', answer: true },
@@ -78,6 +91,7 @@ const FEEDBACK_SESSIONS = [
     submittedAt: '2026-07-24T10:40:00.000Z',
     completedAt: '2026-07-24T10:41:50.000Z',
     attributedEmployeeNumber: 'REG-0004',
+    respondentType: 'visitor',
     answers: [
       { questionText: 'How would you rate your overall experience today?', answer: 2 },
       { questionText: 'Would you recommend our services to others?', answer: false },
@@ -94,8 +108,9 @@ const FEEDBACK_SESSIONS = [
     submittedAt: '2026-07-25T14:20:00.000Z',
     completedAt: '2026-07-25T14:21:15.000Z',
     attributedEmployeeNumber: 'LIB-0002',
-    // V2.6 — see this file's own FEEDBACK_SESSIONS comment.
+    // V2.6/V2.7 — see this file's own FEEDBACK_SESSIONS comment.
     serviceTypeCode: 'LIB-SVC-01',
+    respondentType: 'student',
     answers: [
       { questionText: 'How would you rate your overall experience today?', answer: 5 },
       { questionText: 'Would you recommend our services to others?', answer: true },
@@ -117,6 +132,7 @@ const FEEDBACK_SESSIONS = [
     completedAt: '2026-07-27T11:01:20.000Z',
     attributedEmployeeNumber: 'LIB-0003',
     serviceTypeCode: 'LIB-SVC-03',
+    respondentType: 'employee',
     answers: [
       { questionText: 'How would you rate your overall experience today?', answer: 3 },
       { questionText: 'Would you recommend our services to others?', answer: true },
@@ -148,6 +164,7 @@ const FEEDBACK_SESSIONS = [
     submittedAt: '2026-07-30T09:05:00.000Z',
     completedAt: '2026-07-30T09:07:00.000Z',
     serviceTypeCode: 'REG-SVC-01',
+    respondentType: 'student',
     answers: [
       { questionText: 'How satisfied are you with the registration process?', answer: 5 },
       { questionText: 'Which service did you avail today?', answer: 'Enrollment' },
@@ -170,6 +187,7 @@ const FEEDBACK_SESSIONS = [
     submittedAt: '2026-08-01T15:30:00.000Z',
     completedAt: '2026-08-01T15:32:10.000Z',
     serviceTypeCode: 'REG-SVC-03',
+    respondentType: 'visitor',
     answers: [
       { questionText: 'How satisfied are you with the registration process?', answer: 4 },
       { questionText: 'Which service did you avail today?', answer: 'Document Request' },
@@ -187,6 +205,7 @@ const FEEDBACK_SESSIONS = [
     submittedAt: '2026-08-03T10:10:00.000Z',
     completedAt: '2026-08-03T10:11:45.000Z',
     serviceTypeCode: 'REG-SVC-02',
+    respondentType: 'employee',
     answers: [
       { questionText: 'How satisfied are you with the registration process?', answer: 3 },
       { questionText: 'Which service did you avail today?', answer: 'Grade Inquiry' },
@@ -207,6 +226,7 @@ const FEEDBACK_SESSIONS = [
     submittedAt: '2026-08-05T16:00:00.000Z',
     completedAt: '2026-08-05T16:01:35.000Z',
     serviceTypeCode: 'REG-SVC-06',
+    respondentType: 'student',
     answers: [
       { questionText: 'How satisfied are you with the registration process?', answer: 5 },
       { questionText: 'Which service did you avail today?', answer: 'Other' },
@@ -314,6 +334,10 @@ export async function seedFeedback() {
           status: 'completed',
           ...attribution,
           serviceTypeId,
+          // V2.7 — see this file's own FEEDBACK_SESSIONS comment. No
+          // lookup needed (unlike serviceTypeId) — a fixed enum value,
+          // or null when the definition has none (FB006).
+          respondentType: definition.respondentType ?? null,
         },
       },
       { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },

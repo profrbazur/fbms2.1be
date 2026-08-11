@@ -5,7 +5,7 @@ import {
   endServiceSession,
   getActiveServiceSessionForTablet,
 } from '../services/serviceSessionService.js';
-import { submitFeedbackV2 } from '../services/feedbackService.js';
+import { submitFeedbackV2, listRespondentTypes } from '../services/feedbackService.js';
 import { listActiveServiceTypesForDepartment } from '../services/serviceTypeService.js';
 
 /**
@@ -66,6 +66,19 @@ export const getServiceTypesV2 = asyncHandler(async function getServiceTypesV2(r
   return sendSuccess(res, {
     message: 'Service types retrieved successfully.',
     data: { serviceTypes },
+  });
+});
+
+/**
+ * V2.7 — GET /api/v2/mobile/respondent-types. A fixed, static list — no
+ * department scoping, no query parameter to widen/narrow it (every
+ * tablet sees the same Respondent Types, unlike GET
+ * /api/v2/mobile/service-types).
+ */
+export const getRespondentTypesV2 = asyncHandler(async function getRespondentTypesV2(req, res) {
+  return sendSuccess(res, {
+    message: 'Respondent types retrieved successfully.',
+    data: { respondentTypes: listRespondentTypes() },
   });
 });
 
