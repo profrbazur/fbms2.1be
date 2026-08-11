@@ -9,6 +9,7 @@ import {
   getFeedbackByDepartment,
   getFeedbackBySurvey,
   getFeedbackByMonth,
+  getSatisfactionKpi,
 } from './analyticsService.js';
 
 const RECENT_FEEDBACK_LIMIT = 5;
@@ -49,6 +50,7 @@ export async function getDashboardSummary(user, { trendDays } = {}) {
     feedbackBySurvey,
     feedbackByMonth,
     recent,
+    satisfactionKpi,
   ] = await Promise.all([
     getLiveMonitoringSummary(user),
     listPersonnel(user, { limit: 1 }),
@@ -61,6 +63,12 @@ export async function getDashboardSummary(user, { trendDays } = {}) {
     getFeedbackBySurvey(scopeFilter),
     getFeedbackByMonth(scopeFilter),
     listFeedbackSessions(user, { limit: RECENT_FEEDBACK_LIMIT }),
+    // V2.8 — departmentId present only for a department-pinned scope
+    // (Department Head/Personnel); a global-read role's unscoped `{}`
+    // filter has no `.departmentId`, so this falls back to the
+    // organization default target, same reasoning as reportsService's
+    // own call site.
+    getSatisfactionKpi(scopeFilter, { departmentId: scopeFilter?.departmentId, days: trendDays }),
   ]);
 
   return {
@@ -93,5 +101,8 @@ export async function getDashboardSummary(user, { trendDays } = {}) {
       },
     },
     recentFeedback: recent.feedbackSessions,
+    // V2.8 — Satisfaction KPI Targets, same shape/scoping as Reports'
+    // identical field (see reportsService.getFeedbackSummaryReport).
+    satisfactionKpi,
   };
 }

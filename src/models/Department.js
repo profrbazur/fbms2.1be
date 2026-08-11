@@ -24,6 +24,16 @@ const departmentSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // V2.8 (Satisfaction KPI Targets) — optional override of
+    // OrganizationSettings.defaultSatisfactionTarget for this specific
+    // Office/Department. `null` (the default) means "no override, use the
+    // organization default" — never a second implicit target value.
+    satisfactionTarget: {
+      type: Number,
+      min: 1,
+      max: 5,
+      default: null,
+    },
   },
   { timestamps: true },
 );

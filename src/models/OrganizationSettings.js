@@ -153,6 +153,19 @@ const organizationSettingsSchema = new mongoose.Schema(
       enum: TIME_FORMATS,
       default: '12h',
     },
+    // V2.8 (Satisfaction KPI Targets, backend/docs/v2/V2_8_KPI_TARGETS.md)
+    // — the institution-wide default target on the same 1-5 rating scale
+    // every other analytics figure in this app already uses (averageRating,
+    // Service Quality). A Department's own `satisfactionTarget` (optional)
+    // takes precedence over this when resolving the effective target for a
+    // department-scoped KPI view — see analyticsService.resolveSatisfactionTarget.
+    defaultSatisfactionTarget: {
+      type: Number,
+      required: true,
+      min: 1,
+      max: 5,
+      default: 4,
+    },
   },
   { timestamps: true },
 );

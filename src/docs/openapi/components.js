@@ -132,6 +132,30 @@ const timestamps = {
   updatedAt: { type: 'string', format: 'date-time' },
 };
 
+/**
+ * V2.8 — Satisfaction KPI Targets (backend/docs/v2/V2_8_KPI_TARGETS.md).
+ * Identical shape shared by DashboardSummary.satisfactionKpi and
+ * ReportsSummary.satisfactionKpi (see analyticsService.getSatisfactionKpi).
+ */
+const satisfactionKpi = {
+  type: 'object',
+  description: 'Target vs actual satisfaction on the same 1-5 rating scale as averageRating. target resolves a Department override -> the Organization default, always present. actual/variance are null and status is "no_data" only when there is no rating data in scope yet.',
+  properties: {
+    target: { type: 'number', nullable: true, example: 4.2 },
+    actual: { type: 'number', nullable: true, example: 4.34 },
+    variance: { type: 'number', nullable: true, example: 0.14, description: 'actual - target, rounded to 2 decimals.' },
+    status: { type: 'string', enum: ['above_target', 'below_target', 'on_target', 'no_data'], example: 'above_target' },
+    trend: {
+      type: 'object',
+      description: 'Current 7/30-day rolling-window average rating vs. the window immediately before it. direction is null when an explicit custom date range is selected, or when either window has no rating data.',
+      properties: {
+        direction: { type: 'string', nullable: true, enum: ['up', 'down', 'flat'], example: 'up' },
+        previousActual: { type: 'number', nullable: true, example: 4.21 },
+      },
+    },
+  },
+};
+
 export const schemas = {
   ValidationErrorItem: {
     type: 'object',
@@ -189,6 +213,12 @@ export const schemas = {
       code: { type: 'string', example: 'REG' },
       description: { type: 'string', example: 'Handles student records and enrollment.' },
       isActive: { type: 'boolean', example: true },
+      satisfactionTarget: {
+        type: 'number',
+        nullable: true,
+        example: null,
+        description: 'V2.8 — optional override of OrganizationSettings.defaultSatisfactionTarget for this department. null means "use the organization default."',
+      },
       ...timestamps,
     },
   },
@@ -477,6 +507,11 @@ export const schemas = {
       timezone: { type: 'string', example: 'Asia/Manila' },
       dateFormat: { type: 'string', enum: ['MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD'], example: 'MM/DD/YYYY' },
       timeFormat: { type: 'string', enum: ['12h', '24h'], example: '12h' },
+      defaultSatisfactionTarget: {
+        type: 'number',
+        example: 4,
+        description: 'V2.8 — institution-wide Satisfaction KPI target (1-5 rating scale), used whenever no Department override is configured.',
+      },
       ...timestamps,
     },
   },
@@ -586,6 +621,7 @@ export const schemas = {
         type: 'array',
         items: { $ref: '#/components/schemas/FeedbackSession' },
       },
+      satisfactionKpi,
     },
   },
 
@@ -800,6 +836,7 @@ export const schemas = {
           },
         },
       },
+      satisfactionKpi,
     },
   },
 

@@ -74,7 +74,7 @@ export async function getDepartmentById(user, id) {
 }
 
 export async function createDepartment(payload) {
-  const { name, code, description = '', isActive = true } = payload;
+  const { name, code, description = '', isActive = true, satisfactionTarget = null } = payload;
 
   await assertNoDuplicate({ name, code });
 
@@ -83,6 +83,7 @@ export async function createDepartment(payload) {
     code: code.trim().toUpperCase(),
     description,
     isActive,
+    satisfactionTarget,
   });
 
   return department;
@@ -122,6 +123,9 @@ export async function updateDepartment(id, updates) {
   if (updates.code !== undefined) department.code = updates.code.trim().toUpperCase();
   if (updates.description !== undefined) department.description = updates.description;
   if (updates.isActive !== undefined) department.isActive = updates.isActive;
+  // V2.8 — null explicitly clears the override (falls back to the
+  // organization default); undefined (key absent) leaves it unchanged.
+  if (updates.satisfactionTarget !== undefined) department.satisfactionTarget = updates.satisfactionTarget;
 
   await department.save();
 
