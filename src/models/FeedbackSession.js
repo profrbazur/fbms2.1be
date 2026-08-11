@@ -3,6 +3,22 @@ import mongoose from 'mongoose';
 export const FEEDBACK_SESSION_STATUSES = ['completed'];
 
 /**
+ * V2.7 — anonymous classification only (backend/docs/v2/
+ * V2_7_RESPONDENT_TYPE.md), a fixed system list, not admin-configurable
+ * reference data (contrast with ServiceType/Building, which both have an
+ * explicit "## Model"/"## CRUD" section in their own planning docs; V2.7's
+ * planning doc has neither). No name/ID number/employee number/email/
+ * phone is ever collected alongside it.
+ */
+export const RESPONDENT_TYPES = ['student', 'employee', 'visitor'];
+
+export const RESPONDENT_TYPE_LABELS = {
+  student: 'Student',
+  employee: 'Employee',
+  visitor: 'Visitor',
+};
+
+/**
  * A FeedbackSession is the permanent record of one anonymous, completed
  * survey response collected from a tablet. Version 1 only ever creates
  * `completed` sessions (no partial/abandoned-session tracking yet), and
@@ -51,6 +67,23 @@ export const FEEDBACK_SESSION_STATUSES = ['completed'];
  * validateMobile.js's v1-only FEEDBACK_FIELDS) and always get `null`
  * here. A later ServiceType rename/deactivation must never change what
  * an already-submitted FeedbackSession snapshotted.
+ *
+ * V2.7 — `respondentType` is a plain enum string, not an ObjectId
+ * reference like serviceTypeId: RESPONDENT_TYPES is a fixed, closed set
+ * with no separate mutable record (no name to rename, no active/inactive
+ * lifecycle) for this field to snapshot against, so the enum value itself
+ * is both the stored identity and the display value. Like serviceTypeId,
+ * it genuinely is a client (respondent) selection, independently
+ * validated against RESPONDENT_TYPES before being trusted (see
+ * validateMobile.js) — but unlike serviceTypeId there is no
+ * department-ownership check, since a Respondent Type is not owned by any
+ * department. Optional even on V2 submissions (the planning doc's "may
+ * include respondentType", contrasted with serviceTypeId's required
+ * status) — forcing every respondent to self-classify would work against
+ * the "anonymous, frictionless feedback" goal. Only ever set via POST
+ * /api/v2/mobile/feedback; v1 submissions have no such field in their
+ * request contract (validateMobile.js's v1-only FEEDBACK_FIELDS) and
+ * always get `null` here.
  */
 const feedbackSessionSchema = new mongoose.Schema(
   {
@@ -119,6 +152,11 @@ const feedbackSessionSchema = new mongoose.Schema(
       ref: 'ServiceType',
       default: null,
     },
+    respondentType: {
+      type: String,
+      enum: [...RESPONDENT_TYPES, null],
+      default: null,
+    },
   },
   { timestamps: true },
 );
@@ -130,6 +168,7 @@ feedbackSessionSchema.index({ tabletId: 1 });
 feedbackSessionSchema.index({ personnelId: 1, submittedAt: -1 });
 feedbackSessionSchema.index({ serviceSessionId: 1 });
 feedbackSessionSchema.index({ serviceTypeId: 1, submittedAt: -1 });
+feedbackSessionSchema.index({ respondentType: 1, submittedAt: -1 });
 
 const FeedbackSession = mongoose.model('FeedbackSession', feedbackSessionSchema);
 

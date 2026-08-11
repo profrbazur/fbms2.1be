@@ -18,9 +18,12 @@ import {
   getFeedbackBySurvey,
   getFeedbackByLocation,
   getFeedbackByServiceType,
+  getFeedbackByRespondentType,
+  getFeedbackByServiceTypeAndRespondentType,
   getServiceQualityAverages,
   getServiceQualityByDepartment,
   getServiceQualityByServiceType,
+  getServiceQualityByRespondentType,
 } from './analyticsService.js';
 
 /**
@@ -48,6 +51,16 @@ function serviceQualityByServiceTypeToApi(rows) {
     serviceTypeId,
     serviceTypeName,
     departmentId,
+    ...toApiServiceQuality(categories),
+  }));
+}
+
+// V2.7 — same category boundary conversion, applied to the Respondent
+// Type × Category breakdown instead.
+function serviceQualityByRespondentTypeToApi(rows) {
+  return rows.map(({ respondentType, respondentTypeLabel, ...categories }) => ({
+    respondentType,
+    respondentTypeLabel,
     ...toApiServiceQuality(categories),
   }));
 }
@@ -83,6 +96,8 @@ function emptyFeedbackSummaryReport(filters) {
     feedbackBySurvey: [],
     feedbackByLocation: [],
     feedbackByServiceType: [],
+    feedbackByRespondentType: [],
+    feedbackByServiceTypeAndRespondentType: [],
     surveyPerformance: [],
     tabletContribution: [],
     serviceQuality: {
@@ -92,6 +107,7 @@ function emptyFeedbackSummaryReport(filters) {
       overall: null,
       byDepartment: [],
       byServiceType: [],
+      byRespondentType: [],
     },
   };
 }
@@ -298,14 +314,18 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     feedbackBySurveyBase,
     feedbackByLocationBase,
     feedbackByServiceTypeBase,
+    feedbackByRespondentTypeBase,
+    feedbackByServiceTypeAndRespondentType,
     ratingByDepartment,
     ratingBySurvey,
     ratingByLocation,
     ratingByServiceType,
+    ratingByRespondentType,
     surveys,
     serviceQualityAverages,
     serviceQualityByDepartmentBase,
     serviceQualityByServiceTypeBase,
+    serviceQualityByRespondentTypeBase,
   ] = await Promise.all([
     FeedbackSession.countDocuments(filter),
     getAverageRating(filter),
@@ -331,14 +351,18 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     getFeedbackBySurvey(filter),
     getFeedbackByLocation(filter),
     getFeedbackByServiceType(filter),
+    getFeedbackByRespondentType(filter),
+    getFeedbackByServiceTypeAndRespondentType(filter),
     getRatingAveragesByField(filter, 'session.departmentId'),
     getRatingAveragesByField(filter, 'session.surveyId'),
     getRatingAveragesByField(filter, 'session.locationId'),
     getRatingAveragesByField(filter, 'session.serviceTypeId'),
+    getRatingAveragesByField(filter, 'session.respondentType'),
     listVisibleSurveysForReport(user, { departmentId, surveyId }),
     getServiceQualityAverages(filter),
     getServiceQualityByDepartment(filter),
     getServiceQualityByServiceType(filter),
+    getServiceQualityByRespondentType(filter),
   ]);
 
   const tabletExtraMatch = {};
@@ -351,6 +375,7 @@ export async function getFeedbackSummaryReport(user, query = {}) {
   const feedbackBySurvey = withAverageRating(feedbackBySurveyBase, 'surveyId', ratingBySurvey);
   const feedbackByLocation = withAverageRating(feedbackByLocationBase, 'locationId', ratingByLocation);
   const feedbackByServiceType = withAverageRating(feedbackByServiceTypeBase, 'serviceTypeId', ratingByServiceType);
+  const feedbackByRespondentType = withAverageRating(feedbackByRespondentTypeBase, 'respondentType', ratingByRespondentType);
 
   return {
     filters: resolvedFilters,
@@ -375,6 +400,17 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     // (e.g. before this phase's data existed), same "no rows" convention
     // as feedbackByDepartment.
     feedbackByServiceType,
+    // V2.7 — volume + average rating per Respondent Type (backend/docs/v2/
+    // V2_7_RESPONDENT_TYPE.md's "volume by respondent type" requirement).
+    // Empty for any scope with no respondentType-attributed feedback yet
+    // (every v1-only submission, and any V2 session where the respondent
+    // skipped the optional field), same "no rows" convention as
+    // feedbackByServiceType.
+    feedbackByRespondentType,
+    // V2.7 — the "service type × respondent type" cross-tab (same
+    // planning doc). Only sessions carrying both a serviceTypeId and a
+    // respondentType snapshot contribute a row.
+    feedbackByServiceTypeAndRespondentType,
     surveyPerformance: buildSurveyPerformance(surveys, feedbackBySurveyBase, ratingBySurvey),
     tabletContribution,
     // V2.5 — Courtesy/Clarity/Waiting Time/Overall, scoped identically to
@@ -386,11 +422,13 @@ export async function getFeedbackSummaryReport(user, query = {}) {
     // this table for Department Head/Personnel, mirroring that table's
     // own established convention). `byServiceType` (V2.6) is the same
     // idea, one row per Service Type that has at least one categorized
-    // rating answer.
+    // rating answer. `byRespondentType` (V2.7) is the same idea again,
+    // one row per Respondent Type.
     serviceQuality: {
       ...toApiServiceQuality(serviceQualityAverages),
       byDepartment: serviceQualityByDepartmentToApi(serviceQualityByDepartmentBase),
       byServiceType: serviceQualityByServiceTypeToApi(serviceQualityByServiceTypeBase),
+      byRespondentType: serviceQualityByRespondentTypeToApi(serviceQualityByRespondentTypeBase),
     },
   };
 }

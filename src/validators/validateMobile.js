@@ -1,5 +1,6 @@
 import { ApiError } from '../utils/ApiError.js';
 import { isValidObjectId } from '../utils/isValidObjectId.js';
+import { RESPONDENT_TYPES } from '../models/FeedbackSession.js';
 
 function rejectUnknownFields(body, allowedFields, errors) {
   Object.keys(body)
@@ -61,14 +62,18 @@ export function validateHeartbeat(req, res, next) {
 // V2_API_VERSIONING.md's "Stable Student Contract").
 const FEEDBACK_FIELDS = ['surveyId', 'submittedAt', 'completedAt', 'answers'];
 
-// POST /api/v2/mobile/feedback (V2.6) — the only difference from v1's
-// contract: serviceTypeId is additionally allowed and required, since
-// the enhanced kiosk flow captures which service/transaction type the
-// respondent is rating (backend/docs/v2/V2_6_SERVICE_TYPES.md). Its
+// POST /api/v2/mobile/feedback (V2.6/V2.7) — the only difference from
+// v1's contract: serviceTypeId is additionally allowed and required
+// (V2.6, backend/docs/v2/V2_6_SERVICE_TYPES.md), and respondentType is
+// additionally allowed but optional (V2.7, backend/docs/v2/
+// V2_7_RESPONDENT_TYPE.md — "Enhanced V2 feedback may include
+// respondentType"; forcing every respondent to self-classify would work
+// against the anonymous, frictionless feedback goal). serviceTypeId's
 // correctness (exists, active, correct department) is re-verified
-// server-side in feedbackService.createFeedbackSession — this validator
-// only checks shape.
-const FEEDBACK_FIELDS_V2 = [...FEEDBACK_FIELDS, 'serviceTypeId'];
+// server-side in feedbackService.createFeedbackSession; respondentType
+// has no department ownership to re-verify, so membership in the fixed
+// RESPONDENT_TYPES list is checked once, right here.
+const FEEDBACK_FIELDS_V2 = [...FEEDBACK_FIELDS, 'serviceTypeId', 'respondentType'];
 
 function validateFeedbackBody(body, allowedFields, { requireServiceType }) {
   const errors = [];
@@ -105,6 +110,19 @@ function validateFeedbackBody(body, allowedFields, { requireServiceType }) {
   if (requireServiceType) {
     if (typeof body.serviceTypeId !== 'string' || !isValidObjectId(body.serviceTypeId)) {
       errors.push({ field: 'serviceTypeId', message: 'serviceTypeId is required and must be a valid id.' });
+    }
+  }
+
+  // Only validated when respondentType is actually allowed for this call
+  // (i.e. the V2 route) — on v1, `rejectUnknownFields` above already
+  // reports it as an unknown field, so checking membership here too
+  // would produce a redundant second error for the same field.
+  if (allowedFields.includes('respondentType') && 'respondentType' in body) {
+    if (typeof body.respondentType !== 'string' || !RESPONDENT_TYPES.includes(body.respondentType)) {
+      errors.push({
+        field: 'respondentType',
+        message: `respondentType must be one of: ${RESPONDENT_TYPES.join(', ')}.`,
+      });
     }
   }
 

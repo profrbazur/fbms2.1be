@@ -390,6 +390,7 @@ export const schemas = {
       },
       buildingId: { ...objectId, nullable: true, description: 'V2.4 — snapshotted from the ServiceSession at submission time, not the tablet’s current Location.' },
       serviceTypeId: { ...objectId, nullable: true, description: 'V2.6 — set only for feedback submitted via /api/v2/mobile/feedback, where it is required. Independently verified server-side to belong to the same department as the submitting tablet. null for every pre-V2.6 or v1-submitted session.' },
+      respondentType: { type: 'string', enum: ['student', 'employee', 'visitor'], nullable: true, example: 'student', description: 'V2.7 — optional, anonymous classification only (no name/ID collected). Set only for feedback submitted via /api/v2/mobile/feedback, where it is allowed but never required. null for every pre-V2.7 or v1-submitted session, or any V2 session where the respondent skipped it.' },
       ...timestamps,
     },
   },
@@ -684,6 +685,35 @@ export const schemas = {
           },
         },
       },
+      feedbackByRespondentType: {
+        type: 'array',
+        description: 'V2.7 — volume + average rating per Respondent Type. Empty for any scope with no respondentType-attributed feedback (every v1-only submission, and any V2 session where the respondent skipped the optional field).',
+        items: {
+          type: 'object',
+          properties: {
+            respondentType: { type: 'string', enum: ['student', 'employee', 'visitor'] },
+            respondentTypeLabel: { type: 'string', example: 'Student' },
+            count: { type: 'integer' },
+            averageRating: { type: 'number', nullable: true },
+          },
+        },
+      },
+      feedbackByServiceTypeAndRespondentType: {
+        type: 'array',
+        description: 'V2.7 — the Service Type × Respondent Type cross-tab. Only sessions carrying both a serviceTypeId and a respondentType snapshot contribute a row.',
+        items: {
+          type: 'object',
+          properties: {
+            serviceTypeId: objectId,
+            serviceTypeName: { type: 'string' },
+            departmentId: objectId,
+            respondentType: { type: 'string', enum: ['student', 'employee', 'visitor'] },
+            respondentTypeLabel: { type: 'string', example: 'Student' },
+            count: { type: 'integer' },
+            averageRating: { type: 'number', nullable: true },
+          },
+        },
+      },
       surveyPerformance: {
         type: 'array',
         items: {
@@ -746,6 +776,21 @@ export const schemas = {
                 serviceTypeId: objectId,
                 serviceTypeName: { type: 'string', example: 'Enrollment / Registration' },
                 departmentId: objectId,
+                courtesy: { type: 'number', nullable: true },
+                clarity: { type: 'number', nullable: true },
+                waitingTime: { type: 'number', nullable: true },
+                overall: { type: 'number', nullable: true },
+              },
+            },
+          },
+          byRespondentType: {
+            type: 'array',
+            description: 'V2.7 — the same Category breakdown, grouped by Respondent Type instead of Department. A rating answer whose session has no respondentType is never grouped here.',
+            items: {
+              type: 'object',
+              properties: {
+                respondentType: { type: 'string', enum: ['student', 'employee', 'visitor'] },
+                respondentTypeLabel: { type: 'string', example: 'Student' },
                 courtesy: { type: 'number', nullable: true },
                 clarity: { type: 'number', nullable: true },
                 waitingTime: { type: 'number', nullable: true },

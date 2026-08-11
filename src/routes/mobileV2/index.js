@@ -13,6 +13,7 @@ import {
   getStaffActive,
   postFeedbackV2,
   getServiceTypesV2,
+  getRespondentTypesV2,
 } from '../../controllers/mobileControllerV2.js';
 
 /**
@@ -26,8 +27,9 @@ import {
  * activation itself. /heartbeat, /config, and /survey are unchanged from
  * v1 and reused directly (same controller functions, no duplicated
  * business logic) so a v2 kiosk client never needs to call back into v1
- * for anything. /staff/*, /feedback, and /service-types (V2.6) are the
- * only genuinely new/changed behavior this version introduces.
+ * for anything. /staff/*, /feedback, /service-types (V2.6), and
+ * /respondent-types (V2.7) are the only genuinely new/changed behavior
+ * this version introduces.
  */
 const router = Router();
 
@@ -47,6 +49,11 @@ router.get('/staff/active', getStaffActive);
 // without ever touching the admin-only, role-scoped /api/v1/service-types
 // endpoint (see backend/docs/v2/V2_6_SERVICE_TYPES.md).
 router.get('/service-types', getServiceTypesV2);
+
+// V2.7 — lets the kiosk client populate an optional Respondent Type
+// picker (backend/docs/v2/V2_7_RESPONDENT_TYPE.md). A fixed list, not
+// department-scoped like /service-types above.
+router.get('/respondent-types', getRespondentTypesV2);
 
 router.post('/feedback', validateFeedbackSubmissionV2, postFeedbackV2);
 

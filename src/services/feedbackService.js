@@ -1,4 +1,4 @@
-import FeedbackSession from '../models/FeedbackSession.js';
+import FeedbackSession, { RESPONDENT_TYPES, RESPONDENT_TYPE_LABELS } from '../models/FeedbackSession.js';
 import FeedbackAnswer from '../models/FeedbackAnswer.js';
 import Question from '../models/Question.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -12,6 +12,18 @@ import { assertServiceTypeIsUsable } from './serviceTypeService.js';
 function emptyPagination(limit) {
   const limitNum = Math.min(100, parsePositiveInt(limit, 20));
   return { page: 1, limit: limitNum, total: 0, pages: 0 };
+}
+
+/**
+ * V2.7 — GET /api/v2/mobile/respondent-types. A fixed, static list (no
+ * database query, no department scoping — the same Respondent Types
+ * apply everywhere), unlike serviceTypeService.listActiveServiceTypesForDepartment.
+ * Includes a display `label` alongside each `value` so an Android client
+ * can render a picker without hardcoding its own capitalization/label
+ * map (backend/docs/v2/V2_7_RESPONDENT_TYPE.md).
+ */
+export function listRespondentTypes() {
+  return RESPONDENT_TYPES.map((value) => ({ value, label: RESPONDENT_TYPE_LABELS[value] }));
 }
 
 function parseFilterDate(value, field) {
@@ -264,9 +276,16 @@ async function generateUniqueReferenceCode() {
  * being trusted — it must exist, be active, and belong to the exact same
  * department as the submitting tablet, so a client cannot attribute
  * feedback to another department's service type.
+ *
+ * `payload.respondentType` (V2.7, optional) — like serviceTypeId, comes
+ * from the client, but membership in the fixed RESPONDENT_TYPES list is
+ * already fully verified by validateMobile.js before this ever runs (no
+ * department ownership or active/inactive lifecycle to re-check here,
+ * unlike serviceTypeId — see FeedbackSession.js's own doc comment), so
+ * it is simply passed through.
  */
 async function createFeedbackSession(tablet, payload, attribution) {
-  const { surveyId, submittedAt, completedAt, answers, serviceTypeId } = payload;
+  const { surveyId, submittedAt, completedAt, answers, serviceTypeId, respondentType } = payload;
 
   const activeSurvey = await resolveActiveSurveyForTablet(tablet);
 
@@ -359,6 +378,7 @@ async function createFeedbackSession(tablet, payload, attribution) {
     personnelId: attribution?.personnelId ?? null,
     buildingId: attribution?.buildingId ?? null,
     serviceTypeId: resolvedServiceTypeId,
+    respondentType: respondentType ?? null,
   });
 
   const createdAnswers = await FeedbackAnswer.insertMany(

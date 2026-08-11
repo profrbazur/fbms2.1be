@@ -5,6 +5,7 @@ import Department from '../models/Department.js';
 import Survey from '../models/Survey.js';
 import Location from '../models/Location.js';
 import ServiceType from '../models/ServiceType.js';
+import { RESPONDENT_TYPE_LABELS } from '../models/FeedbackSession.js';
 import { SERVICE_QUALITY_CATEGORIES } from '../models/Question.js';
 import { ApiError } from '../utils/ApiError.js';
 import { isValidObjectId } from '../utils/isValidObjectId.js';
@@ -757,4 +758,168 @@ export async function getServiceQualityByServiceType(filter) {
       };
     })
     .sort((a, b) => a.serviceTypeName.localeCompare(b.serviceTypeName));
+}
+
+/**
+ * V2.7 — feedback volume grouped by Respondent Type (backend/docs/v2/
+ * V2_7_RESPONDENT_TYPE.md's "volume by respondent type" requirement).
+ * No database lookup needed (unlike getFeedbackByServiceType) —
+ * RESPONDENT_TYPE_LABELS supplies the display label directly from the
+ * fixed enum value. Only sessions that actually carry a respondentType
+ * snapshot are counted; a session with respondentType: null (every
+ * v1-submitted session, and any V2 session where the respondent skipped
+ * the optional field) simply doesn't contribute a row, matching
+ * getFeedbackByServiceType's own "no rows, not zero-filled rows"
+ * convention.
+ */
+export async function getFeedbackByRespondentType(filter) {
+  if (filter === null) return [];
+
+  const rows = await FeedbackSession.aggregate([
+    { $match: { ...filter, respondentType: { $ne: null } } },
+    { $group: { _id: '$respondentType', count: { $sum: 1 } } },
+  ]);
+
+  return rows
+    .map((row) => ({
+      respondentType: row._id,
+      respondentTypeLabel: RESPONDENT_TYPE_LABELS[row._id] ?? row._id,
+      count: row.count,
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * V2.7 — Respondent Type × Service Quality Category, the same shape as
+ * getServiceQualityByServiceType but grouped by `session.respondentType`
+ * instead of `session.serviceTypeId` (backend/docs/v2/
+ * V2_7_RESPONDENT_TYPE.md's "quality categories by respondent type"
+ * requirement). A rating answer whose session has no respondentType
+ * simply isn't grouped here.
+ */
+export async function getServiceQualityByRespondentType(filter) {
+  if (filter === null) return [];
+
+  const sessionMatch = Object.fromEntries(Object.entries(filter).map(([field, value]) => [`session.${field}`, value]));
+
+  const rows = await FeedbackAnswer.aggregate([
+    { $match: { questionType: 'rating', serviceQualityCategory: { $in: SERVICE_QUALITY_CATEGORIES } } },
+    {
+      $lookup: {
+        from: 'feedbacksessions',
+        localField: 'feedbackSessionId',
+        foreignField: '_id',
+        as: 'session',
+      },
+    },
+    { $unwind: '$session' },
+    { $match: { 'session.respondentType': { $ne: null } } },
+    ...(Object.keys(sessionMatch).length > 0 ? [{ $match: sessionMatch }] : []),
+    {
+      $group: {
+        _id: { respondentType: '$session.respondentType', category: '$serviceQualityCategory' },
+        averageRating: { $avg: '$answer' },
+      },
+    },
+  ]);
+
+  if (rows.length === 0) return [];
+
+  const byRespondentType = new Map();
+  rows.forEach((row) => {
+    const respondentType = row._id.respondentType;
+    if (!byRespondentType.has(respondentType)) {
+      byRespondentType.set(respondentType, emptyServiceQuality());
+    }
+    byRespondentType.get(respondentType)[row._id.category] = Math.round(row.averageRating * 100) / 100;
+  });
+
+  return [...byRespondentType.entries()]
+    .map(([respondentType, categories]) => ({
+      respondentType,
+      respondentTypeLabel: RESPONDENT_TYPE_LABELS[respondentType] ?? respondentType,
+      ...categories,
+      overall: computeOverallServiceQuality(categories),
+    }))
+    .sort((a, b) => a.respondentTypeLabel.localeCompare(b.respondentTypeLabel));
+}
+
+/**
+ * V2.7 — Service Type × Respondent Type cross-tab (backend/docs/v2/
+ * V2_7_RESPONDENT_TYPE.md's "service type × respondent type" analytics
+ * requirement). Both dimensions must be present on the same session — a
+ * session missing either simply isn't grouped here, the same convention
+ * getFeedbackByServiceType/getFeedbackByRespondentType each use
+ * individually. Volume comes from FeedbackSession (one row per session,
+ * regardless of how many rating answers it has); average rating is
+ * computed separately via the same FeedbackAnswer join every other
+ * average-rating aggregation in this file uses, then merged by the
+ * compound key.
+ */
+export async function getFeedbackByServiceTypeAndRespondentType(filter) {
+  if (filter === null) return [];
+
+  const matchBoth = { ...filter, serviceTypeId: { $ne: null }, respondentType: { $ne: null } };
+
+  const countRows = await FeedbackSession.aggregate([
+    { $match: matchBoth },
+    {
+      $group: {
+        _id: { serviceTypeId: '$serviceTypeId', respondentType: '$respondentType' },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  if (countRows.length === 0) return [];
+
+  const sessionMatch = Object.fromEntries(Object.entries(matchBoth).map(([field, value]) => [`session.${field}`, value]));
+
+  const ratingRows = await FeedbackAnswer.aggregate([
+    { $match: { questionType: 'rating' } },
+    {
+      $lookup: {
+        from: 'feedbacksessions',
+        localField: 'feedbackSessionId',
+        foreignField: '_id',
+        as: 'session',
+      },
+    },
+    { $unwind: '$session' },
+    { $match: sessionMatch },
+    {
+      $group: {
+        _id: { serviceTypeId: '$session.serviceTypeId', respondentType: '$session.respondentType' },
+        averageRating: { $avg: '$answer' },
+      },
+    },
+  ]);
+
+  const ratingByKey = new Map(
+    ratingRows.map((row) => [
+      `${row._id.serviceTypeId.toString()}:${row._id.respondentType}`,
+      Math.round(row.averageRating * 100) / 100,
+    ]),
+  );
+
+  const serviceTypeIds = [...new Set(countRows.map((row) => row._id.serviceTypeId.toString()))];
+  const serviceTypes = await ServiceType.find({ _id: { $in: serviceTypeIds } }).select('_id name departmentId');
+  const serviceTypeById = new Map(serviceTypes.map((serviceType) => [serviceType._id.toString(), serviceType]));
+
+  return countRows
+    .map((row) => {
+      const serviceTypeId = row._id.serviceTypeId.toString();
+      const serviceType = serviceTypeById.get(serviceTypeId);
+      const key = `${serviceTypeId}:${row._id.respondentType}`;
+      return {
+        serviceTypeId: row._id.serviceTypeId,
+        serviceTypeName: serviceType?.name ?? 'Unknown Service Type',
+        departmentId: serviceType?.departmentId ?? null,
+        respondentType: row._id.respondentType,
+        respondentTypeLabel: RESPONDENT_TYPE_LABELS[row._id.respondentType] ?? row._id.respondentType,
+        count: row.count,
+        averageRating: ratingByKey.get(key) ?? null,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
 }
