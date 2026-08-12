@@ -21,6 +21,7 @@ import { settingsPaths } from '../../src/docs/openapi/paths/settings.js';
 import { auditLogsPaths } from '../../src/docs/openapi/paths/auditLogs.js';
 import { developerPortalPaths } from '../../src/docs/openapi/paths/developerPortal.js';
 import { mobilePaths } from '../../src/docs/openapi/paths/mobile.js';
+import { mobileV2Paths } from '../../src/docs/openapi/paths/mobileV2.js';
 
 const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'];
 const pathModules = [
@@ -45,6 +46,7 @@ const pathModules = [
   auditLogsPaths,
   developerPortalPaths,
   mobilePaths,
+  mobileV2Paths,
 ];
 
 function collectOperations(paths) {

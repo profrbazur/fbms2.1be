@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticateDevice } from '../../middleware/authenticateDevice.js';
+import { staffPinRateLimiter } from '../../middleware/rateLimiter.js';
 import {
   validateHeartbeat,
   validateFeedbackSubmissionV2,
@@ -40,7 +41,7 @@ router.get('/config', getConfig);
 router.get('/survey', getSurvey);
 router.post('/sync', validateSync, postSync);
 
-router.post('/staff/login', validateStaffLogin, postStaffLogin);
+router.post('/staff/login', staffPinRateLimiter, validateStaffLogin, postStaffLogin);
 router.post('/staff/logout', postStaffLogout);
 router.get('/staff/active', getStaffActive);
 

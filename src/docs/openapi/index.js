@@ -42,6 +42,7 @@ import { settingsPaths } from './paths/settings.js';
 import { auditLogsPaths } from './paths/auditLogs.js';
 import { developerPortalPaths } from './paths/developerPortal.js';
 import { mobilePaths } from './paths/mobile.js';
+import { mobileV2Paths } from './paths/mobileV2.js';
 
 const tags = [
   { name: 'System', description: 'Unauthenticated liveness check.' },
@@ -64,7 +65,8 @@ const tags = [
   { name: 'Settings', description: 'A second route surface over the same OrganizationSettings singleton, plus logo upload.' },
   { name: 'Audit Logs', description: 'Append-only administrative action history (Super Admin only).' },
   { name: 'Developer Portal', description: 'Super-Admin-only teaching/demo utility.' },
-  { name: 'Mobile API', description: 'The Android kiosk contract — Device Secret authentication, never staff JWT.' },
+  { name: 'Mobile API', description: 'The frozen Version 1 Android kiosk contract (/api/v1/mobile/*) — Device Secret authentication, never staff JWT. Still the current contract for the existing mobile/ Android app. Coexists unmodified alongside Mobile API V2 below.' },
+  { name: 'Mobile API V2 (Staff PIN Kiosk)', description: 'V2.4+ — the enhanced kiosk workflow at /api/v2/mobile/*, a sibling namespace to /api/v1 (not nested under it). Adds Staff PIN login/ServiceSession, Service Type (V2.6) and Respondent Type (V2.7) attribution on top of the same Device Secret authentication as Mobile API. A future mobilev2 Android project should target this contract, not the V1 Mobile API tag above.' },
 ];
 
 const paths = {
@@ -89,6 +91,7 @@ const paths = {
   ...auditLogsPaths,
   ...developerPortalPaths,
   ...mobilePaths,
+  ...mobileV2Paths,
 };
 
 /**
@@ -108,8 +111,8 @@ export function buildOpenApiDocument() {
       title: 'FBMS API',
       version: '1.0.0',
       description:
-        'Feedback Management System (FBMS) REST API — the shared backend for the React administration web app and the Android kiosk mobile app. All application routes are versioned under `/api/v1`. This specification documents Version 1 exactly as implemented and frozen (see `docs/DECISIONS.md` ADR-051/ADR-052); OpenAPI/Swagger documentation itself is a Version 2.1, purely additive enhancement — no endpoint, field, status code, or authorization rule described here was changed to produce it.\n\n' +
-        'Two authentication schemes exist and are never interchangeable: **bearerAuth** (staff JWT, `Authorization: Bearer <token>`) for every `/api/v1/*` route except `/mobile/*`, and **deviceAuth** (tablet Device Secret, `Authorization: Device <secret>`) for every `/api/v1/mobile/*` route. See each scheme’s own description below for the full flow.\n\n' +
+        'Feedback Management System (FBMS) REST API — the shared backend for the React administration web app and the Android kiosk mobile app(s). The admin/web surface and the frozen Version 1 mobile kiosk contract are versioned under `/api/v1` (see `docs/DECISIONS.md` ADR-051/ADR-052; OpenAPI/Swagger documentation itself is a Version 2.1, purely additive enhancement — no endpoint, field, status code, or authorization rule described here was changed to produce it). A second, currently-supported mobile generation — the enhanced Staff PIN kiosk workflow added in V2.4 — is a **sibling namespace at `/api/v2/mobile/*`, not nested under `/api/v1`**; see the "Mobile API V2 (Staff PIN Kiosk)" tag. A future `mobilev2` Android project should target that V2 contract, not the frozen V1 one.\n\n' +
+        'Two authentication schemes exist and are never interchangeable: **bearerAuth** (staff JWT, `Authorization: Bearer <token>`) for every `/api/v1/*` route except `/mobile/*`, and **deviceAuth** (tablet Device Secret, `Authorization: Device <secret>`) for every `/api/v1/mobile/*` and `/api/v2/mobile/*` route. See each scheme’s own description below for the full flow.\n\n' +
         'All responses use one of two envelopes: `{ success, message, data }` on success, `{ success, message, errors }` on failure (see the ErrorResponse schema) — with one documented exception, `GET /health`.',
       contact: { name: 'FBMS Developer Portal', url: '/administration/developer-portal' },
       license: { name: 'UNLICENSED — internal academic project, not for redistribution' },
