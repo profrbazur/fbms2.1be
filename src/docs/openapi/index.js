@@ -37,6 +37,7 @@ import { dashboardPaths } from './paths/dashboard.js';
 import { reportsPaths } from './paths/reports.js';
 import { analyticsPaths } from './paths/analytics.js';
 import { liveMonitoringPaths } from './paths/liveMonitoring.js';
+import { notificationsPaths } from './paths/notifications.js';
 import { settingsPaths } from './paths/settings.js';
 import { auditLogsPaths } from './paths/auditLogs.js';
 import { developerPortalPaths } from './paths/developerPortal.js';
@@ -59,6 +60,7 @@ const tags = [
   { name: 'Reports', description: 'Consolidated read-only feedback analytics report.' },
   { name: 'Analytics', description: 'V2.9 — role-specific advanced analytics (institution/office/personal views), docs/v2/V2_9_ADVANCED_ANALYTICS.md.' },
   { name: 'Live Monitoring', description: 'Real-time-ish tablet status, assigned survey, and recent activity.' },
+  { name: 'Notifications', description: 'V2.10 — derived, read-only notifications (device offline, satisfaction below target, repeated low-rating pattern). No persistence, docs/v2/V2_FUTURE_ROADMAP.md.' },
   { name: 'Settings', description: 'A second route surface over the same OrganizationSettings singleton, plus logo upload.' },
   { name: 'Audit Logs', description: 'Append-only administrative action history (Super Admin only).' },
   { name: 'Developer Portal', description: 'Super-Admin-only teaching/demo utility.' },
@@ -82,6 +84,7 @@ const paths = {
   ...reportsPaths,
   ...analyticsPaths,
   ...liveMonitoringPaths,
+  ...notificationsPaths,
   ...settingsPaths,
   ...auditLogsPaths,
   ...developerPortalPaths,

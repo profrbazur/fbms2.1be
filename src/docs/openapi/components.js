@@ -999,6 +999,47 @@ export const schemas = {
     },
   },
 
+  NotificationsResponse: {
+    type: 'object',
+    description: 'V2.10 — derived, not persisted. Every notification is recomputed on each request from existing Live Monitoring/V2.8/V2.9 logic; `id` is deterministic (built from the underlying entity id) so the frontend can recognize the same condition across polls, but is never stored server-side.',
+    properties: {
+      notifications: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', example: 'device-offline:65f1c2a4b8e4a2a1d4e5f6a7' },
+            type: { type: 'string', enum: ['device_offline', 'satisfaction_below_target', 'repeated_low_rating'] },
+            severity: { type: 'string', enum: ['warning', 'danger'] },
+            title: { type: 'string', example: 'Registrar Main Counter Kiosk is offline' },
+            message: { type: 'string', example: 'Tablet at Registrar Main Counter is currently offline.' },
+            scope: {
+              type: 'object',
+              description: 'Which department/location/tablet this notification concerns. Never a personnelId or any individual-employee identifier.',
+              properties: {
+                departmentId: { type: 'string', nullable: true },
+                departmentName: { type: 'string', nullable: true },
+                locationId: { type: 'string', nullable: true },
+                locationName: { type: 'string', nullable: true },
+                tabletId: { type: 'string', nullable: true },
+              },
+            },
+            metadata: { type: 'object', description: 'Type-specific supporting figures (e.g. lastSeen, actual/target/variance, lowRatingCount).' },
+          },
+        },
+      },
+      counts: {
+        type: 'object',
+        properties: {
+          total: { type: 'integer' },
+          deviceOffline: { type: 'integer' },
+          satisfactionBelowTarget: { type: 'integer' },
+          repeatedLowRating: { type: 'integer' },
+        },
+      },
+    },
+  },
+
   LiveMonitoringSummary: {
     type: 'object',
     properties: {

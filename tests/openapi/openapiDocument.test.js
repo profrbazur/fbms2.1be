@@ -15,6 +15,7 @@ import { feedbackPaths } from '../../src/docs/openapi/paths/feedback.js';
 import { dashboardPaths } from '../../src/docs/openapi/paths/dashboard.js';
 import { reportsPaths } from '../../src/docs/openapi/paths/reports.js';
 import { analyticsPaths } from '../../src/docs/openapi/paths/analytics.js';
+import { notificationsPaths } from '../../src/docs/openapi/paths/notifications.js';
 import { liveMonitoringPaths } from '../../src/docs/openapi/paths/liveMonitoring.js';
 import { settingsPaths } from '../../src/docs/openapi/paths/settings.js';
 import { auditLogsPaths } from '../../src/docs/openapi/paths/auditLogs.js';
@@ -39,6 +40,7 @@ const pathModules = [
   reportsPaths,
   analyticsPaths,
   liveMonitoringPaths,
+  notificationsPaths,
   settingsPaths,
   auditLogsPaths,
   developerPortalPaths,
