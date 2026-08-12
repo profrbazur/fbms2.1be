@@ -840,6 +840,165 @@ export const schemas = {
     },
   },
 
+  AdvancedAnalytics: {
+    type: 'object',
+    description: 'V2.9 — Advanced Role-Specific Analytics (docs/v2/V2_9_ADVANCED_ANALYTICS.md). `roleView` discriminates which single shape `data` holds: "institution" (Super Admin/Senior Leadership, institution-wide), "office" (Department Head, own Office only), or "personal" (Personnel, own individual attribution-based data only). Count/rating breakdown arrays (feedbackByServiceType, feedbackByRespondentType, etc.) and quality-category breakdown arrays (serviceQualityByServiceType, etc.) intentionally mirror ReportsSummary\'s own field shapes so the same id-based join the frontend already performs for Reports works unchanged here.',
+    properties: {
+      roleView: { type: 'string', enum: ['institution', 'office', 'personal'], example: 'institution' },
+      filters: {
+        type: 'object',
+        properties: {
+          departmentId: { type: 'string', nullable: true },
+          buildingId: { type: 'string', nullable: true },
+          dateFrom: { type: 'string', nullable: true },
+          dateTo: { type: 'string', nullable: true },
+        },
+      },
+      data: {
+        description: 'Shape depends on roleView — see the "institution"/"office"/"personal" examples below. All row arrays use the same "no rows for unattributed data" convention as ReportsSummary (e.g. a Building with zero attributed feedback simply never appears).',
+        oneOf: [
+          {
+            title: 'institution',
+            type: 'object',
+            properties: {
+              officeRanking: {
+                type: 'array',
+                description: 'Every Department ranked by average rating, highest first (ties broken by volume; departments with no rating data sort last).',
+                items: {
+                  type: 'object',
+                  properties: {
+                    departmentId: objectId,
+                    departmentName: { type: 'string' },
+                    count: { type: 'integer' },
+                    averageRating: { type: 'number', nullable: true },
+                    rank: { type: 'integer', example: 1 },
+                  },
+                },
+              },
+              buildingPerformance: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: { buildingId: objectId, buildingName: { type: 'string' }, count: { type: 'integer' }, averageRating: { type: 'number', nullable: true } },
+                },
+              },
+              locationPerformance: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: { locationId: objectId, locationName: { type: 'string' }, departmentId: objectId, departmentName: { type: 'string' }, count: { type: 'integer' }, averageRating: { type: 'number', nullable: true } },
+                },
+              },
+              serviceQualityHeatmap: {
+                type: 'array',
+                description: 'Office × Service Quality Category, same shape as ReportsSummary.serviceQuality.byDepartment.',
+                items: {
+                  type: 'object',
+                  properties: { departmentId: objectId, departmentName: { type: 'string' }, courtesy: { type: 'number', nullable: true }, clarity: { type: 'number', nullable: true }, waitingTime: { type: 'number', nullable: true }, overall: { type: 'number', nullable: true } },
+                },
+              },
+              monthlyTrend: {
+                type: 'array',
+                items: { type: 'object', properties: { month: { type: 'string', example: '2026-08' }, count: { type: 'integer' } } },
+              },
+              ratingDistribution: {
+                type: 'array',
+                items: { type: 'object', properties: { rating: { type: 'integer' }, count: { type: 'integer' }, percentage: { type: 'number' } } },
+              },
+              feedbackByServiceType: { type: 'array', items: { type: 'object', properties: { serviceTypeId: objectId, serviceTypeName: { type: 'string' }, departmentId: objectId, count: { type: 'integer' }, averageRating: { type: 'number', nullable: true } } } },
+              serviceQualityByServiceType: { type: 'array', items: { type: 'object', properties: { serviceTypeId: objectId, serviceTypeName: { type: 'string' }, departmentId: objectId, courtesy: { type: 'number', nullable: true }, clarity: { type: 'number', nullable: true }, waitingTime: { type: 'number', nullable: true }, overall: { type: 'number', nullable: true } } } },
+              feedbackByRespondentType: { type: 'array', items: { type: 'object', properties: { respondentType: { type: 'string', enum: ['student', 'employee', 'visitor'] }, respondentTypeLabel: { type: 'string' }, count: { type: 'integer' }, averageRating: { type: 'number', nullable: true } } } },
+              serviceQualityByRespondentType: { type: 'array', items: { type: 'object', properties: { respondentType: { type: 'string', enum: ['student', 'employee', 'visitor'] }, respondentTypeLabel: { type: 'string' }, courtesy: { type: 'number', nullable: true }, clarity: { type: 'number', nullable: true }, waitingTime: { type: 'number', nullable: true }, overall: { type: 'number', nullable: true } } } },
+              satisfactionKpi,
+              peakHours: {
+                type: 'object',
+                properties: {
+                  byHour: { type: 'array', items: { type: 'object', properties: { hour: { type: 'integer', minimum: 0, maximum: 23 }, count: { type: 'integer' } } } },
+                  byDayOfWeek: { type: 'array', items: { type: 'object', properties: { day: { type: 'string', example: 'Monday' }, count: { type: 'integer' } } } },
+                  busiestHour: { type: 'integer', nullable: true },
+                  busiestDayOfWeek: { type: 'string', nullable: true },
+                },
+              },
+              periodComparison: {
+                type: 'object',
+                description: 'Current vs. immediately-preceding rolling window of equal length (7/30 days, or the resolved default).',
+                properties: {
+                  current: { type: 'object', properties: { averageRating: { type: 'number', nullable: true }, feedbackCount: { type: 'integer' } } },
+                  previous: { type: 'object', properties: { averageRating: { type: 'number', nullable: true }, feedbackCount: { type: 'integer' } } },
+                  percentageChange: { type: 'number', nullable: true, description: 'Feedback volume percentage change vs. the previous window. null when the previous window had zero feedback.' },
+                  ratingDelta: { type: 'number', nullable: true },
+                },
+              },
+            },
+          },
+          {
+            title: 'office',
+            type: 'object',
+            properties: {
+              departmentId: objectId,
+              departmentName: { type: 'string', example: 'Registrar' },
+              serviceQuality: { type: 'object', properties: { courtesy: { type: 'number', nullable: true }, clarity: { type: 'number', nullable: true }, waitingTime: { type: 'number', nullable: true }, overall: { type: 'number', nullable: true } } },
+              buildingComparison: { type: 'array', items: { type: 'object', properties: { buildingId: objectId, buildingName: { type: 'string' }, count: { type: 'integer' }, averageRating: { type: 'number', nullable: true } } } },
+              windowComparison: { type: 'array', description: 'Feedback by Location ("Service Window"), scoped to this Office.', items: { type: 'object', properties: { locationId: objectId, locationName: { type: 'string' }, departmentId: objectId, departmentName: { type: 'string' }, count: { type: 'integer' }, averageRating: { type: 'number', nullable: true } } } },
+              staffPerformance: { type: 'array', items: { type: 'object', properties: { personnelId: objectId, personnelName: { type: 'string' }, departmentId: objectId, count: { type: 'integer' }, averageRating: { type: 'number', nullable: true } } } },
+              staffServiceQuality: { type: 'array', items: { type: 'object', properties: { personnelId: objectId, personnelName: { type: 'string' }, departmentId: objectId, courtesy: { type: 'number', nullable: true }, clarity: { type: 'number', nullable: true }, waitingTime: { type: 'number', nullable: true }, overall: { type: 'number', nullable: true } } } },
+              feedbackByServiceType: { type: 'array', items: { type: 'object', properties: { serviceTypeId: objectId, serviceTypeName: { type: 'string' }, departmentId: objectId, count: { type: 'integer' }, averageRating: { type: 'number', nullable: true } } } },
+              serviceQualityByServiceType: { type: 'array', items: { type: 'object', properties: { serviceTypeId: objectId, serviceTypeName: { type: 'string' }, departmentId: objectId, courtesy: { type: 'number', nullable: true }, clarity: { type: 'number', nullable: true }, waitingTime: { type: 'number', nullable: true }, overall: { type: 'number', nullable: true } } } },
+              feedbackByRespondentType: { type: 'array', items: { type: 'object', properties: { respondentType: { type: 'string', enum: ['student', 'employee', 'visitor'] }, respondentTypeLabel: { type: 'string' }, count: { type: 'integer' }, averageRating: { type: 'number', nullable: true } } } },
+              serviceQualityByRespondentType: { type: 'array', items: { type: 'object', properties: { respondentType: { type: 'string', enum: ['student', 'employee', 'visitor'] }, respondentTypeLabel: { type: 'string' }, courtesy: { type: 'number', nullable: true }, clarity: { type: 'number', nullable: true }, waitingTime: { type: 'number', nullable: true }, overall: { type: 'number', nullable: true } } } },
+              trend: { type: 'array', items: { type: 'object', properties: { date: { type: 'string' }, count: { type: 'integer' } } } },
+              recentComments: {
+                type: 'array',
+                description: 'Most recent short_text/long_text answers in scope, newest first, capped at 20. Never includes an empty-string answer.',
+                items: { type: 'object', properties: { feedbackSessionId: objectId, referenceCode: { type: 'string', example: 'FB-2026-000004' }, questionText: { type: 'string' }, answer: { type: 'string' }, submittedAt: { type: 'string', format: 'date-time' } } },
+              },
+              lowRatingPatterns: {
+                type: 'object',
+                description: 'byLocation only lists a Location once it has accumulated 2+ low ratings (<=2) in scope — a single isolated low rating never singles out a Service Window.',
+                properties: {
+                  lowRatingCount: { type: 'integer' },
+                  totalRatingCount: { type: 'integer' },
+                  lowRatingPercentage: { type: 'number' },
+                  byLocation: { type: 'array', items: { type: 'object', properties: { locationId: objectId, locationName: { type: 'string' }, lowRatingCount: { type: 'integer' } } } },
+                },
+              },
+            },
+          },
+          {
+            title: 'personal',
+            type: 'object',
+            description: 'Personnel\'s own individual data, resolved via the Personnel record linked to the logged-in User (Personnel.userId). hasAttributionData is false only when the logged-in Personnel-role user has no linked Personnel record at all — a linked record with zero attributed feedback still reports hasAttributionData: true with feedbackCount: 0.',
+            properties: {
+              personnelId: { ...objectId, nullable: true },
+              fullName: { type: 'string', nullable: true, example: 'Andrea Reyes' },
+              hasAttributionData: { type: 'boolean' },
+              averageRating: { type: 'number', nullable: true },
+              feedbackCount: { type: 'integer' },
+              serviceQuality: { type: 'object', properties: { courtesy: { type: 'number', nullable: true }, clarity: { type: 'number', nullable: true }, waitingTime: { type: 'number', nullable: true }, overall: { type: 'number', nullable: true } } },
+              recentTrend: { type: 'array', items: { type: 'object', properties: { date: { type: 'string' }, count: { type: 'integer' } } } },
+              recentComments: {
+                type: 'array',
+                items: { type: 'object', properties: { feedbackSessionId: objectId, referenceCode: { type: 'string' }, questionText: { type: 'string' }, answer: { type: 'string' }, submittedAt: { type: 'string', format: 'date-time' } } },
+              },
+            },
+          },
+        ],
+      },
+      insights: {
+        type: 'array',
+        description: 'Deterministic numeric insights only — no ML (docs/v2/V2_9_ADVANCED_ANALYTICS.md). Each source of data (monthly trend, category averages, period comparison, recent-N-response trend) only contributes an insight when it genuinely supports one; nothing is fabricated from partial data.',
+        items: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['highest_feedback_month', 'consecutive_trend', 'best_category', 'worst_category', 'percentage_change', 'current_vs_previous', 'recent_rating_trend'] },
+            label: { type: 'string', example: 'August 2026 had the highest feedback volume (5 responses).' },
+            value: { type: 'object', description: 'The raw figures behind label, shape depends on type.' },
+          },
+        },
+      },
+    },
+  },
+
   LiveMonitoringSummary: {
     type: 'object',
     properties: {

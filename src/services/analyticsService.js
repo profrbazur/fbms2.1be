@@ -4,9 +4,11 @@ import FeedbackAnswer from '../models/FeedbackAnswer.js';
 import Department from '../models/Department.js';
 import Survey from '../models/Survey.js';
 import Location from '../models/Location.js';
+import Building from '../models/Building.js';
+import Personnel from '../models/Personnel.js';
 import ServiceType from '../models/ServiceType.js';
 import { RESPONDENT_TYPE_LABELS } from '../models/FeedbackSession.js';
-import { SERVICE_QUALITY_CATEGORIES } from '../models/Question.js';
+import Question, { SERVICE_QUALITY_CATEGORIES } from '../models/Question.js';
 import { ApiError } from '../utils/ApiError.js';
 import { isValidObjectId } from '../utils/isValidObjectId.js';
 import { parseFilterDate } from '../utils/parseFilterDate.js';
@@ -922,6 +924,420 @@ export async function getFeedbackByServiceTypeAndRespondentType(filter) {
       };
     })
     .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * V2.9 — feedback volume grouped by Building (backend/docs/v2/
+ * V2_9_ADVANCED_ANALYTICS.md's "Building performance" requirement), the
+ * same shape/convention as `getFeedbackByLocation` above. Only sessions
+ * carrying a `buildingId` snapshot (V2.4 staff-attribution path) are
+ * counted — a session with `buildingId: null` (every pre-V2.4 or
+ * unattributed session) simply doesn't contribute a row, matching every
+ * other `getFeedbackBy*` "no rows, not zero-filled rows" convention in
+ * this file.
+ */
+export async function getFeedbackByBuilding(filter) {
+  if (filter === null) return [];
+
+  const rows = await FeedbackSession.aggregate([
+    { $match: { ...filter, buildingId: { $ne: null } } },
+    { $group: { _id: '$buildingId', count: { $sum: 1 } } },
+  ]);
+
+  if (rows.length === 0) return [];
+
+  const buildings = await Building.find({ _id: { $in: rows.map((row) => row._id) } }).select('_id name');
+  const nameById = new Map(buildings.map((building) => [building._id.toString(), building.name]));
+
+  return rows
+    .map((row) => ({
+      buildingId: row._id,
+      buildingName: nameById.get(row._id.toString()) ?? 'Unknown Building',
+      count: row.count,
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * V2.9 — feedback volume grouped by attributed staff member ("staff
+ * performance", backend/docs/v2/V2_9_ADVANCED_ANALYTICS.md), the same
+ * shape/convention as `getFeedbackByServiceType`. Only sessions carrying a
+ * `personnelId` snapshot (V2.4 ServiceSession attribution) are counted —
+ * unattributed feedback never appears as a misleading "Unknown Staff" row,
+ * matching every other `getFeedbackBy*` convention here.
+ */
+export async function getFeedbackByPersonnel(filter) {
+  if (filter === null) return [];
+
+  const rows = await FeedbackSession.aggregate([
+    { $match: { ...filter, personnelId: { $ne: null } } },
+    { $group: { _id: '$personnelId', count: { $sum: 1 } } },
+  ]);
+
+  if (rows.length === 0) return [];
+
+  const personnel = await Personnel.find({ _id: { $in: rows.map((row) => row._id) } }).select(
+    '_id firstName middleName lastName suffix departmentId',
+  );
+  const personnelById = new Map(personnel.map((person) => [person._id.toString(), person]));
+
+  return rows
+    .map((row) => {
+      const person = personnelById.get(row._id.toString());
+      return {
+        personnelId: row._id,
+        personnelName: person?.fullName ?? 'Unknown Staff',
+        departmentId: person?.departmentId ?? null,
+        count: row.count,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * V2.9 — Staff × Service Quality Category, the same shape as
+ * `getServiceQualityByServiceType` but grouped by `session.personnelId`.
+ * A rating answer whose session has no personnelId simply isn't grouped
+ * here — same "no misleading Unknown row" reasoning as
+ * `getFeedbackByPersonnel` above.
+ */
+export async function getServiceQualityByPersonnel(filter) {
+  if (filter === null) return [];
+
+  const sessionMatch = Object.fromEntries(Object.entries(filter).map(([field, value]) => [`session.${field}`, value]));
+
+  const rows = await FeedbackAnswer.aggregate([
+    { $match: { questionType: 'rating', serviceQualityCategory: { $in: SERVICE_QUALITY_CATEGORIES } } },
+    {
+      $lookup: {
+        from: 'feedbacksessions',
+        localField: 'feedbackSessionId',
+        foreignField: '_id',
+        as: 'session',
+      },
+    },
+    { $unwind: '$session' },
+    { $match: { 'session.personnelId': { $ne: null } } },
+    ...(Object.keys(sessionMatch).length > 0 ? [{ $match: sessionMatch }] : []),
+    {
+      $group: {
+        _id: { personnelId: '$session.personnelId', category: '$serviceQualityCategory' },
+        averageRating: { $avg: '$answer' },
+      },
+    },
+  ]);
+
+  if (rows.length === 0) return [];
+
+  const personnelIds = [...new Set(rows.map((row) => row._id.personnelId.toString()))];
+  const personnel = await Personnel.find({ _id: { $in: personnelIds } }).select(
+    '_id firstName middleName lastName suffix departmentId',
+  );
+  const personnelById = new Map(personnel.map((person) => [person._id.toString(), person]));
+
+  const byPersonnel = new Map();
+  rows.forEach((row) => {
+    const personnelId = row._id.personnelId.toString();
+    if (!byPersonnel.has(personnelId)) {
+      byPersonnel.set(personnelId, emptyServiceQuality());
+    }
+    byPersonnel.get(personnelId)[row._id.category] = Math.round(row.averageRating * 100) / 100;
+  });
+
+  return [...byPersonnel.entries()]
+    .map(([personnelId, categories]) => {
+      const person = personnelById.get(personnelId);
+      return {
+        personnelId,
+        personnelName: person?.fullName ?? 'Unknown Staff',
+        departmentId: person?.departmentId ?? null,
+        ...categories,
+        overall: computeOverallServiceQuality(categories),
+      };
+    })
+    .sort((a, b) => a.personnelName.localeCompare(b.personnelName));
+}
+
+// V2.9 — fixed weekday-name lookup for `getPeakHours`'s `$dayOfWeek`
+// aggregation output (Mongo's `$dayOfWeek` is 1=Sunday..7=Saturday).
+const DAY_OF_WEEK_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/**
+ * V2.9 — "peak hours / busiest days" (backend/docs/v2/
+ * V2_9_ADVANCED_ANALYTICS.md). Groups in-scope `FeedbackSession.submittedAt`
+ * by hour-of-day (0-23, UTC) and by day-of-week, zero-filled for every
+ * bucket — the same continuous-series convention `getFeedbackTrend`/
+ * `getRatingDistribution` already use, so a chart never has to guess
+ * whether a missing bucket means "zero" or "not computed yet".
+ * `busiestHour`/`busiestDayOfWeek` are `null` when every bucket is 0 (no
+ * in-scope feedback at all) rather than an arbitrary first bucket.
+ */
+export async function getPeakHours(filter) {
+  const emptyResult = () => ({
+    byHour: Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 })),
+    byDayOfWeek: DAY_OF_WEEK_LABELS.map((day) => ({ day, count: 0 })),
+    busiestHour: null,
+    busiestDayOfWeek: null,
+  });
+
+  if (filter === null) return emptyResult();
+
+  const [hourRows, dayRows] = await Promise.all([
+    FeedbackSession.aggregate([
+      { $match: filter },
+      { $group: { _id: { $hour: '$submittedAt' }, count: { $sum: 1 } } },
+    ]),
+    FeedbackSession.aggregate([
+      { $match: filter },
+      { $group: { _id: { $dayOfWeek: '$submittedAt' }, count: { $sum: 1 } } },
+    ]),
+  ]);
+
+  const countByHour = new Map(hourRows.map((row) => [row._id, row.count]));
+  const countByDay = new Map(dayRows.map((row) => [row._id, row.count]));
+
+  const byHour = Array.from({ length: 24 }, (_, hour) => ({ hour, count: countByHour.get(hour) ?? 0 }));
+  const byDayOfWeek = DAY_OF_WEEK_LABELS.map((day, index) => ({ day, count: countByDay.get(index + 1) ?? 0 }));
+
+  const busiestHourEntry = byHour.reduce((best, entry) => (entry.count > (best?.count ?? 0) ? entry : best), null);
+  const busiestDayEntry = byDayOfWeek.reduce((best, entry) => (entry.count > (best?.count ?? 0) ? entry : best), null);
+
+  return {
+    byHour,
+    byDayOfWeek,
+    busiestHour: busiestHourEntry && busiestHourEntry.count > 0 ? busiestHourEntry.hour : null,
+    busiestDayOfWeek: busiestDayEntry && busiestDayEntry.count > 0 ? busiestDayEntry.day : null,
+  };
+}
+
+/**
+ * V2.9 — "period-over-period comparisons" (backend/docs/v2/
+ * V2_9_ADVANCED_ANALYTICS.md). Compares in-scope feedback volume and
+ * average rating over the current `days`-length rolling window against the
+ * immediately preceding window of equal length — the same current-vs-
+ * previous-window mechanics `getSatisfactionTrend` (V2.8) already
+ * established, generalized here to also report volume (not just rating),
+ * since "period comparison" is a broader requirement than the KPI trend
+ * arrow alone. `percentageChange` is `null` (not a divide-by-zero guess)
+ * when the previous window had zero feedback.
+ */
+export async function getPeriodComparison(filter, { days } = {}) {
+  const emptyPeriod = () => ({ averageRating: null, feedbackCount: 0 });
+
+  if (filter === null) {
+    return { current: emptyPeriod(), previous: emptyPeriod(), percentageChange: null, ratingDelta: null };
+  }
+
+  const trendDays = VALID_TREND_DAYS.includes(days) ? days : await getDefaultTrendWindowDays();
+  const { startDate: currentStart, endDate: currentEnd } = await resolveRollingWindowDates(trendDays);
+
+  const previousEnd = new Date(currentStart);
+  previousEnd.setUTCDate(previousEnd.getUTCDate() - 1);
+  const previousStart = new Date(previousEnd);
+  previousStart.setUTCDate(previousStart.getUTCDate() - (trendDays - 1));
+
+  const currentEndExclusive = new Date(currentEnd);
+  currentEndExclusive.setUTCDate(currentEndExclusive.getUTCDate() + 1);
+  const previousEndExclusive = new Date(previousEnd);
+  previousEndExclusive.setUTCDate(previousEndExclusive.getUTCDate() + 1);
+
+  const currentFilter = { ...filter, submittedAt: { $gte: currentStart, $lt: currentEndExclusive } };
+  const previousFilter = { ...filter, submittedAt: { $gte: previousStart, $lt: previousEndExclusive } };
+
+  const [currentCount, previousCount, currentAverage, previousAverage] = await Promise.all([
+    FeedbackSession.countDocuments(currentFilter),
+    FeedbackSession.countDocuments(previousFilter),
+    getAverageRating(currentFilter),
+    getAverageRating(previousFilter),
+  ]);
+
+  const percentageChange =
+    previousCount === 0 ? null : Math.round(((currentCount - previousCount) / previousCount) * 10000) / 100;
+  const ratingDelta =
+    currentAverage === null || previousAverage === null
+      ? null
+      : Math.round((currentAverage - previousAverage) * 100) / 100;
+
+  return {
+    current: { averageRating: currentAverage, feedbackCount: currentCount },
+    previous: { averageRating: previousAverage, feedbackCount: previousCount },
+    percentageChange,
+    ratingDelta,
+  };
+}
+
+/**
+ * V2.9 — "own comments/history" (Employee) and "comments" (Department
+ * Head), backend/docs/v2/V2_9_ADVANCED_ANALYTICS.md. Only `short_text`/
+ * `long_text` answers are "comments" — `rating`/`yes_no`/`multiple_choice`
+ * carry no free-text content (backend/docs/v2/V2_9_ADVANCED_ANALYTICS.md
+ * has no separate sentiment/review concept, per the roadmap's existing
+ * "no sentiment analysis" exclusion — ADR-030's sibling reasoning). Most
+ * recent first, capped at `limit` (default 20, this phase's own read-only
+ * "recent comments" list is not a paginated browse view).
+ */
+export async function getRecentComments(filter, { limit = 20 } = {}) {
+  if (filter === null) return [];
+
+  const sessionMatch = Object.fromEntries(Object.entries(filter).map(([field, value]) => [`session.${field}`, value]));
+
+  const rows = await FeedbackAnswer.aggregate([
+    { $match: { questionType: { $in: ['short_text', 'long_text'] }, answer: { $ne: '' } } },
+    {
+      $lookup: {
+        from: 'feedbacksessions',
+        localField: 'feedbackSessionId',
+        foreignField: '_id',
+        as: 'session',
+      },
+    },
+    { $unwind: '$session' },
+    ...(Object.keys(sessionMatch).length > 0 ? [{ $match: sessionMatch }] : []),
+    { $sort: { 'session.submittedAt': -1 } },
+    { $limit: limit },
+    {
+      $project: {
+        _id: 0,
+        feedbackSessionId: '$session._id',
+        referenceCode: '$session.referenceCode',
+        questionId: 1,
+        answer: 1,
+        submittedAt: '$session.submittedAt',
+      },
+    },
+  ]);
+
+  if (rows.length === 0) return [];
+
+  const questions = await Question.find({ _id: { $in: rows.map((row) => row.questionId) } }).select(
+    '_id questionText',
+  );
+  const questionTextById = new Map(questions.map((question) => [question._id.toString(), question.questionText]));
+
+  return rows.map((row) => ({
+    feedbackSessionId: row.feedbackSessionId,
+    referenceCode: row.referenceCode,
+    questionText: questionTextById.get(row.questionId.toString()) ?? 'Unknown Question',
+    answer: row.answer,
+    submittedAt: row.submittedAt,
+  }));
+}
+
+/**
+ * V2.9 — "low-rating patterns" (Department Head), backend/docs/v2/
+ * V2_9_ADVANCED_ANALYTICS.md. Deliberately does not surface a single
+ * isolated low rating as a "pattern" — V2.10's own standing instruction
+ * ("Avoid punitive alerts based on one anonymous low rating") is a
+ * project-wide principle this phase also honors: `byLocation` only lists a
+ * location once it has accumulated 2+ low ratings (`rating` answers <= 2)
+ * in scope, so a single unlucky respondent never singles out a Service
+ * Window. `lowRatingCount`/`lowRatingPercentage` are always the honest
+ * totals regardless (an aggregate fact, not a targeted call-out).
+ */
+export async function getLowRatingPatterns(filter) {
+  const empty = { lowRatingCount: 0, totalRatingCount: 0, lowRatingPercentage: 0, byLocation: [] };
+  if (filter === null) return empty;
+
+  const sessionMatch = Object.fromEntries(Object.entries(filter).map(([field, value]) => [`session.${field}`, value]));
+
+  const [totals, byLocationRows] = await Promise.all([
+    FeedbackAnswer.aggregate([
+      { $match: { questionType: 'rating' } },
+      {
+        $lookup: { from: 'feedbacksessions', localField: 'feedbackSessionId', foreignField: '_id', as: 'session' },
+      },
+      { $unwind: '$session' },
+      ...(Object.keys(sessionMatch).length > 0 ? [{ $match: sessionMatch }] : []),
+      {
+        $group: {
+          _id: null,
+          totalRatingCount: { $sum: 1 },
+          lowRatingCount: { $sum: { $cond: [{ $lte: ['$answer', 2] }, 1, 0] } },
+        },
+      },
+    ]),
+    FeedbackAnswer.aggregate([
+      { $match: { questionType: 'rating', answer: { $lte: 2 } } },
+      {
+        $lookup: { from: 'feedbacksessions', localField: 'feedbackSessionId', foreignField: '_id', as: 'session' },
+      },
+      { $unwind: '$session' },
+      ...(Object.keys(sessionMatch).length > 0 ? [{ $match: sessionMatch }] : []),
+      { $group: { _id: '$session.locationId', count: { $sum: 1 } } },
+      { $match: { count: { $gte: 2 } } },
+    ]),
+  ]);
+
+  const totalRatingCount = totals[0]?.totalRatingCount ?? 0;
+  const lowRatingCount = totals[0]?.lowRatingCount ?? 0;
+
+  let byLocation = [];
+  if (byLocationRows.length > 0) {
+    const locations = await Location.find({ _id: { $in: byLocationRows.map((row) => row._id) } }).select('_id name');
+    const nameById = new Map(locations.map((location) => [location._id.toString(), location.name]));
+    byLocation = byLocationRows
+      .map((row) => ({
+        locationId: row._id,
+        locationName: nameById.get(row._id.toString()) ?? 'Unknown Location',
+        lowRatingCount: row.count,
+      }))
+      .sort((a, b) => b.lowRatingCount - a.lowRatingCount);
+  }
+
+  return {
+    lowRatingCount,
+    totalRatingCount,
+    lowRatingPercentage: totalRatingCount === 0 ? 0 : Math.round((lowRatingCount / totalRatingCount) * 10000) / 100,
+    byLocation,
+  };
+}
+
+/**
+ * V2.9 — Employee "Recent Feedback Trend" (frontend/docs/v2/
+ * V2_9_ADVANCED_ANALYTICS_UI.md's preferred indicator: "Satisfaction
+ * decreased by 0.3 over the last 10 responses."). Deliberately windowed by
+ * response *count*, not calendar days — an individual staff member's
+ * feedback volume is far lower than a whole Office's, so a fixed 7/30-day
+ * window could easily contain zero or one response and never produce a
+ * meaningful comparison. Compares the most recent `windowSize` rating
+ * answers against the `windowSize` immediately before them; `direction`
+ * is `null` (not a guess) whenever fewer than `windowSize` prior answers
+ * exist to compare against.
+ */
+export async function getRecentRatingTrend(filter, { windowSize = 10 } = {}) {
+  const empty = { recentAverage: null, previousAverage: null, delta: null, direction: null, sampleSize: 0 };
+  if (filter === null) return empty;
+
+  const sessionMatch = Object.fromEntries(Object.entries(filter).map(([field, value]) => [`session.${field}`, value]));
+
+  const rows = await FeedbackAnswer.aggregate([
+    { $match: { questionType: 'rating' } },
+    {
+      $lookup: { from: 'feedbacksessions', localField: 'feedbackSessionId', foreignField: '_id', as: 'session' },
+    },
+    { $unwind: '$session' },
+    ...(Object.keys(sessionMatch).length > 0 ? [{ $match: sessionMatch }] : []),
+    { $sort: { 'session.submittedAt': -1 } },
+    { $limit: windowSize * 2 },
+    { $project: { _id: 0, answer: 1 } },
+  ]);
+
+  if (rows.length === 0) return empty;
+
+  const recentSlice = rows.slice(0, windowSize);
+  const previousSlice = rows.slice(windowSize, windowSize * 2);
+
+  const average = (slice) =>
+    slice.length === 0 ? null : Math.round((slice.reduce((sum, row) => sum + row.answer, 0) / slice.length) * 100) / 100;
+
+  const recentAverage = average(recentSlice);
+  const previousAverage = previousSlice.length === windowSize ? average(previousSlice) : null;
+
+  const delta =
+    recentAverage === null || previousAverage === null ? null : Math.round((recentAverage - previousAverage) * 100) / 100;
+  const direction = delta === null ? null : delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
+
+  return { recentAverage, previousAverage, delta, direction, sampleSize: recentSlice.length };
 }
 
 /**

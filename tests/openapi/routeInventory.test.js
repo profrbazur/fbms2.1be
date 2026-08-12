@@ -40,9 +40,10 @@ describe('API inventory regression (Express routes vs. OpenAPI paths)', () => {
    * GET/PATCH /service-types/{id}), the admin-facing half of that phase
    * (its own breaking-workflow-adjacent addition, GET
    * /api/v2/mobile/service-types, is likewise outside this inventory).
+   * V2.9 added 1 more additive endpoint (GET /analytics/advanced).
    */
-  it('matches the current endpoint count (53 frozen V1 + 4 additive V2.3 Building + 3 additive V2.4 + 4 additive V2.6 Service Type endpoints)', () => {
-    expect(ROUTE_INVENTORY.length).toBe(64);
+  it('matches the current endpoint count (53 frozen V1 + 4 additive V2.3 Building + 3 additive V2.4 + 4 additive V2.6 Service Type + 1 additive V2.9 Analytics endpoints)', () => {
+    expect(ROUTE_INVENTORY.length).toBe(65);
   });
 
   /**

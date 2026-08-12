@@ -35,6 +35,7 @@ import { surveysPaths } from './paths/surveys.js';
 import { feedbackPaths } from './paths/feedback.js';
 import { dashboardPaths } from './paths/dashboard.js';
 import { reportsPaths } from './paths/reports.js';
+import { analyticsPaths } from './paths/analytics.js';
 import { liveMonitoringPaths } from './paths/liveMonitoring.js';
 import { settingsPaths } from './paths/settings.js';
 import { auditLogsPaths } from './paths/auditLogs.js';
@@ -56,6 +57,7 @@ const tags = [
   { name: 'Feedback', description: 'Read-only, immutable, anonymous feedback sessions and answers.' },
   { name: 'Dashboard', description: 'Role-scoped operational summary.' },
   { name: 'Reports', description: 'Consolidated read-only feedback analytics report.' },
+  { name: 'Analytics', description: 'V2.9 — role-specific advanced analytics (institution/office/personal views), docs/v2/V2_9_ADVANCED_ANALYTICS.md.' },
   { name: 'Live Monitoring', description: 'Real-time-ish tablet status, assigned survey, and recent activity.' },
   { name: 'Settings', description: 'A second route surface over the same OrganizationSettings singleton, plus logo upload.' },
   { name: 'Audit Logs', description: 'Append-only administrative action history (Super Admin only).' },
@@ -78,6 +80,7 @@ const paths = {
   ...feedbackPaths,
   ...dashboardPaths,
   ...reportsPaths,
+  ...analyticsPaths,
   ...liveMonitoringPaths,
   ...settingsPaths,
   ...auditLogsPaths,
