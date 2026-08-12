@@ -194,8 +194,9 @@ export const schemas = {
       displayName: { type: 'string', example: 'Alex Santos' },
       role: {
         type: 'string',
-        enum: ['super_admin', 'department_head', 'personnel'],
+        enum: ['super_admin', 'senior_leadership', 'department_head', 'personnel'],
         example: 'super_admin',
+        description: 'senior_leadership (V2.2) has institution-wide read access, enforced as read-only by omission from every mutation route’s role allow-list — see docs/v2/V2_2_SENIOR_LEADERSHIP.md.',
       },
       departmentId: { ...objectId, nullable: true },
       authProvider: { type: 'string', enum: ['local', 'google'], example: 'local' },

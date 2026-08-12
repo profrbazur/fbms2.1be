@@ -1,5 +1,14 @@
 import { successEnvelope, commonResponses } from '../components.js';
 
+/**
+ * The frozen Version 1 Android kiosk contract (docs/DECISIONS.md
+ * ADR-051/ADR-052), still current for the existing mobile/ Android app.
+ * A second, currently-supported mobile generation with Staff PIN
+ * authentication and attribution exists as a sibling namespace at
+ * /api/v2/mobile/* — see paths/mobileV2.js and the "Mobile API V2" tag.
+ * A future mobilev2 Android project should target that V2 contract, not
+ * this V1 one.
+ */
 const answerSchema = {
   type: 'object',
   required: ['questionId', 'answer'],
