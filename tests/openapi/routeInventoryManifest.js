@@ -66,6 +66,7 @@ export const ROUTE_INVENTORY = [
   ['PATCH', '/questions/{id}'],
   ['GET', '/reports/feedback-summary'],
   ['GET', '/analytics/advanced'],
+  ['GET', '/notifications'],
   ['GET', '/settings'],
   ['PATCH', '/settings'],
   ['POST', '/settings/logo'],
